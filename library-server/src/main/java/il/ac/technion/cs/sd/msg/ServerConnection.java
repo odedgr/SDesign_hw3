@@ -7,6 +7,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Consumer;
 
+import com.google.gson.Gson;
+
 public class ServerConnection {
 
 	// CONSTANTS
@@ -22,7 +24,7 @@ public class ServerConnection {
 	private final Thread receiver; // thread taking each incoming message from queue and dispatching a handler
 	private final Thread sender; // thread in charge of sending outgoing messages from queue
 	private final Object ackNotifier = new Object();
-//	private final Gson gson = new Gson();
+	private final Gson gson = new Gson();
 	// TODO figure out how the hell to get Gson working in this f*cking maven hierarchy
 	
 	
