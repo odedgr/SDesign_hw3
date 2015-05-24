@@ -1,9 +1,17 @@
 package il.ac.technion.cs.sd.app.msg;
 
+/**
+ * A class representing a friend invitation over the network.
+ */
 public class FriendInvitation {
 	public final String from;
 	public final String to;
 
+	/**
+	 * Create a new friend invitation.
+	 * @param from the requesting client name.
+	 * @param to the requested client name.
+	 */
 	public FriendInvitation(String from, String to) {
 		super();
 		this.from = from;
