@@ -5,21 +5,22 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import com.google.gson.Gson;
 
-public class ServerConnection {
+public class ServerConnection<Message> {
 
 	// CONSTANTS
 	private static final String ACK = "";
 	
 	// INSTANCE VARIABLES
-	private final BlockingQueue<Envelope> incomingMessages = new LinkedBlockingQueue<>();
-	private final BlockingQueue<Envelope> outgoingMessages = new LinkedBlockingQueue<>();
+	private final BlockingQueue<Envelope<Message>> incomingMessages = new LinkedBlockingQueue<>();
+	private final BlockingQueue<Envelope<Message>> outgoingMessages = new LinkedBlockingQueue<>();
 	private final String address;
 	private final Messenger messenger;
-	private final Consumer<String> consumer;
+	private final BiConsumer<String, Message> consumer;
 	private final ExecutorService executor; // thread pool, for message handlers using supplied consumer
 	private final Thread receiver; // thread taking each incoming message from queue and dispatching a handler
 	private final Thread sender; // thread in charge of sending outgoing messages from queue
@@ -36,7 +37,7 @@ public class ServerConnection {
 	 * each incoming message (that is not an ACK). Different "types" of messages should be classified and handled
 	 * accordingly on the application side.
 	 */
-	public ServerConnection(String address, Consumer<String> consumer) {
+	public ServerConnection(String address, BiConsumer<String, Message> consumer) {
 		if (null == address || "".equals(address)) {
 			throw new InvalidParameterException("invalid server address - empty or null");
 		}
@@ -80,20 +81,26 @@ public class ServerConnection {
 	 * 	
 	 * @param inMsg
 	 */
-	private void handleIncomingMessage(String inMsg) { // TODO convert inMsg to Envelope using Gson ?
+	private void handleIncomingMessage(String inMsg) { 
 		// add incoming message to queue for handling and send ACK to sender
+		// TODO handle receiving ACK
+		
+		
+		// TODO extract Envelope here, and use in later methods
+		
 		String sender = getSenderOfMessage(inMsg);
-		String message = getMessageContent(inMsg);
+		Message message = getMessageContent(inMsg);
 		sendAck(sender);
 		
 		// dispatch handling to a separate thread, which might add an outgoing message later, using the send() method
-		executor.execute(() -> this.consumer.accept(message));
+		this.consumer.accept(sender, message);
+//		executor.execute(() -> this.consumer.accept(message));
 	}
 	
-	private String getMessageContent(String inMsg) {
+	private Message getMessageContent(String inMsg) {
 		// TODO convert to envelope using Gson, and extract payload
 		// TODO implement
-		return "";
+		return null;
 	}
 
 	private String getSenderOfMessage(String inMsg) {
@@ -129,7 +136,7 @@ public class ServerConnection {
 		// TODO "convert" inMsg to Envelope using Gson ?
 		try {
 			String sender = getSenderOfMessage(inMsg);
-			String payload = getMessageContent(inMsg);
+			Message payload = getMessageContent(inMsg);
 			
 			this.incomingMessages.put(Envelope.wrap(sender, payload));
 		} catch (InterruptedException e) {
