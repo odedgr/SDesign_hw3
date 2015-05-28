@@ -35,7 +35,7 @@ public class FriendInvitation {
 			return false;
 		if (getClass() != obj.getClass())
 			return false;
-		InstantMessage other = (InstantMessage)obj;
+		FriendInvitation other = (FriendInvitation)obj;
 		if (from == null) {
 			if (other.from != null)
 				return false;
