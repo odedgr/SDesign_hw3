@@ -17,11 +17,11 @@ public class MessengerTest {
 	// a helper method and list for creating messengers, so we can remember to kill them
 	private final Collection<Messenger>	messengers			= new ArrayList<>();
 	
-	// all listened to incoming messages will be written here
+	// all listened to incoming messages will be written here by default
 	private final BlockingQueue<String>	incomingMessages	= new LinkedBlockingQueue<>();
 	
 	@Rule
-	public Timeout						globaltime			= Timeout.seconds(1);
+	public Timeout						globaltime			= Timeout.seconds(5);
 	
 	private Messenger startAndAddToList() throws Exception {
 		return startAndAddToList(messengers.size() + "", x -> incomingMessages.add(x));
@@ -93,8 +93,8 @@ public class MessengerTest {
 	public void shouldReceiveASentMessage() throws Exception {
 		Messenger m1 = startAndAddToList();
 		Messenger m2 = startAndAddToList();
-		m1.send(m2.getAddress(), "hello");
-		assertEquals(incomingMessages.take(), "hello");
+		m1.send(m2.getAddress(), "");
+		assertEquals(incomingMessages.take(), "");
 	}
 	
 	@Test(expected = MessengerException.class)
@@ -143,11 +143,13 @@ public class MessengerTest {
 	public void emptyMessagesNeverFail() throws Exception {
 		Messenger m1 = startAndAddToList();
 		Messenger m2 = startAndAddToList();
-		for (int i = 0; i < 100; i++)
+		for (int i = 0; i < 100; i++) {
 			m1.send(m2.getAddress(), "");
-		assertEquals(incomingMessages.size(), 100);
+			incomingMessages.take();
+		}
 	}
 	
+	@SuppressWarnings("deprecation")
 	@Test
 	public void shouldBlockWhenNoMessage() throws Exception {
 		Messenger $ = startAndAddToList();
@@ -158,4 +160,34 @@ public class MessengerTest {
 		Thread.sleep(500);
 	}
 	
+	@Test
+	public void shouldReturnNullIfNoMessageIsReceived() throws Exception {
+		Messenger $ = startAndAddToList();
+		assertEquals($.getNextMessage(10), null);
+	}
+	
+	@Test
+	public void shouldGetNextMessageWhileConsuming() throws Exception {
+		// the sends a message to the sleeper and waits for a reply waker then sleeps; the waker wakes the sleeper
+		Messenger sleeper = new MessengerFactory().start("sleeper", (m, x) -> {
+			try {
+				m.send("miracle", "");
+				m.getNextMessage(100);
+				incomingMessages.add("Hi!");
+			} catch (Exception e) {
+				throw new AssertionError(e);
+			}
+		});
+		Messenger waker = new MessengerFactory().start("miracle", (m, x) -> {
+			try {
+				m.send("sleeper", "");
+			} catch (Exception e) {
+				throw new AssertionError(e);
+			}
+		});
+		waker.send(sleeper.getAddress(), "");
+		assertEquals(incomingMessages.take(), "Hi!");
+		sleeper.kill();
+		waker.kill();
+	}
 }
