@@ -13,7 +13,7 @@
 			<!-- the messaging api -->
 			<groupId>il.ac.technion.cs.sd</groupId>
 			<artifactId>messaging</artifactId>
-			<version>2.1</version>
+			<version>[2.20,3.0)</version>
 		</dependency>
 		<dependency>
 			<groupId>com.google.code.gson</groupId>
