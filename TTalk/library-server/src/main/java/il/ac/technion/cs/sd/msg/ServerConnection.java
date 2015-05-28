@@ -12,7 +12,6 @@ public class ServerConnection<Message> {
 
 	// CONSTANTS
 	private static final String ACK = "";
-
 	private static final long ACK_TIMEOUT_IN_MILLISECONDS = 50L;
 	
 	// INSTANCE VARIABLES
@@ -225,7 +224,7 @@ public class ServerConnection<Message> {
 			throw new InvalidParameterException("payload to send was null");
 		}
 		
-		if ("".equals(payload)) { // send an ACK - no need to wait for incoming ACK in return
+		if (ACK.equals(payload)) { // send an ACK - no need to wait for incoming ACK in return
 			sendAck(to);
 			return;
 		}
