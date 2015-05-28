@@ -3,12 +3,18 @@ package il.ac.technion.cs.sd.msg;
 import java.util.concurrent.BlockingQueue;
 import java.util.function.BiConsumer;
 
-public class Transmitter extends Thread {
-	private final BlockingQueue<Envelope> queue;
-	private final BiConsumer<String, String> consumer; // (String so, String payload)
+public class Transmitter<Message> extends Thread {
+	private final BlockingQueue<Envelope<Message>> queue;
+	private final BiConsumer<String, Message> consumer; // (client, payload)
 	private boolean isActive = true;
 	
-	public Transmitter(BlockingQueue<Envelope> q, BiConsumer<String, String> c) {
+	/**
+	 * Create a Transmitter, for sending each message in the queue, by order of insertion.
+	 * 
+	 * @param q - Queue that holds incoming messages for handling.
+	 * @param c - Consumer representing callback for handling massages.
+	 */
+	public Transmitter(BlockingQueue<Envelope<Message>> q, BiConsumer<String, Message> c) {
 		this.queue = q;
 		this.consumer = c;
 	}
@@ -16,23 +22,29 @@ public class Transmitter extends Thread {
 	
 	@Override
 	public void run() {
-
-while (isActive && !this.queue.isEmpty()) {
+		while (isActive) {
+			Envelope<Message> env = null;
 			
 			try {
-				Envelope env = this.queue.take(); 
-				String destination = env.address;
-				String msg = env.payload;
-				this.consumer.accept(destination, msg);
+				synchronized (this.queue) { // sync for completing sending when transmitter is stopped
+					env = this.queue.take(); // blocking call
+					this.consumer.accept(env.address, env.payload);
+				}
 			} catch (InterruptedException e) {
-				System.out.println("transmitter thread interrupted while trying to take message from queue. ignoring it.");
+				if (this.isActive) {
+					System.out.println("transmitter thread unintentionally interrupted.");
+				}
 			}
 		}
-		
 	}
 
 	
 	public void stopMe() {
+		System.out.println("stopping transmitter.");
 		this.isActive = false;
+		
+		synchronized (this.queue) { // allow for in-motion message to complete sending
+			this.interrupt(); 
+		}
 	}
 }

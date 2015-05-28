@@ -1,19 +1,19 @@
 package il.ac.technion.cs.sd.msg;
 
 import java.security.InvalidParameterException;
+import java.util.Collection;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
-
-import com.google.gson.Gson;
 
 public class ServerConnection<Message> {
 
 	// CONSTANTS
 	private static final String ACK = "";
+
+	private static final long ACK_TIMEOUT_IN_MILLISECONDS = 50L;
 	
 	// INSTANCE VARIABLES
 	private final BlockingQueue<Envelope<Message>> incomingMessages = new LinkedBlockingQueue<>();
@@ -22,22 +22,24 @@ public class ServerConnection<Message> {
 	private final Messenger messenger;
 	private final BiConsumer<String, Message> consumer;
 	private final ExecutorService executor; // thread pool, for message handlers using supplied consumer
-	private final Thread receiver; // thread taking each incoming message from queue and dispatching a handler
-	private final Thread sender; // thread in charge of sending outgoing messages from queue
+	private final Dispatcher<Message> receiver; // thread taking each incoming message from queue and dispatching a handler
+	private final Dispatcher<Message> sender; // thread in charge of sending outgoing messages from queue
 	private final Object ackNotifier = new Object();
-	private final Gson gson = new Gson();
-	
+	private final Codec<Envelope<Message>> codec;
+	private boolean isActive = false;
+	private boolean gotAck = false;
 	
 	/**
 	 * Constructor. Creates and starts a running connection, accepting and handling incoming messages as well as
-	 * sending back outgoing replies.
+	 * sending back outgoing replies, using a custom {@link Codec} to encode/decode messages into the set Message type of the connection.
 	 * 
 	 * @param address - This server's address.
 	 * @param consumer - Application-defined function to handle incoming messages of type String. Will be applied for
 	 * each incoming message (that is not an ACK). Different "types" of messages should be classified and handled
 	 * accordingly on the application side.
+	 * @param codec - Custom codec for encoding/decoding messages.
 	 */
-	public ServerConnection(String address, BiConsumer<String, Message> consumer) {
+	public ServerConnection(String address, BiConsumer<String, Message> consumer, Codec<Envelope<Message>> codec) {
 		if (null == address || "".equals(address)) {
 			throw new InvalidParameterException("invalid server address - empty or null");
 		}
@@ -46,8 +48,13 @@ public class ServerConnection<Message> {
 			throw new InvalidParameterException("got null consumer");
 		}
 		
+		if (null == codec) {
+			throw new InvalidParameterException("got null codec");
+		}
+		
 		this.address = address;
 		this.consumer = consumer;
+		this.codec = codec;
 		
 		try {
 			messenger = new MessengerFactory().start(address, x -> receiveIncomingMessage(x));
@@ -57,56 +64,45 @@ public class ServerConnection<Message> {
 		}
 		
 		this.executor = Executors.newCachedThreadPool();
-		this.receiver = new Dispatcher(this.incomingMessages, x -> handleIncomingMessage(x));
-		this.sender   = new Transmitter(this.outgoingMessages, (addr, msg) -> safeSend(addr, msg));
+		this.receiver = new Dispatcher<Message>(this.incomingMessages, x -> handleIncomingMessage(x));
+		this.sender   = new Dispatcher<Message>(this.outgoingMessages, x -> safeSend(x));
 		
 		start();
 	}
 	
 	/**
-	 * Do actual sending, with validation of arrival at the receiver side, re-sending periodically, until an ACK is received.
+	 * Constructor. Creates and starts a running connection, accepting and handling incoming messages as well as
+	 * sending back outgoing replies, using the default {@link Codec}.
 	 * 
-	 * @param to
-	 * @param payload
-	 * @return
+	 * @param address - This server's address.
+	 * @param consumer - Application-defined function to handle incoming messages of type String. Will be applied for
+	 * each incoming message (that is not an ACK). Different "types" of messages should be classified and handled
+	 * accordingly on the application side.
 	 */
-	private void safeSend(String to, String payload) {
-		// TODO Auto-generated method stub
-	}
-
-	/**
-	 * Handle an incoming message, that is NOT an ACK (e.g: has actual contents).
-	 * An ACK is sent back immediately to the sender of the message, and the message is handled using
-	 * the consumer sent to this ServerConnection upon initialization.
-	 * 	
-	 * @param inMsg
-	 */
-	private void handleIncomingMessage(String inMsg) { 
-		// add incoming message to queue for handling and send ACK to sender
-		// TODO handle receiving ACK
-		
-		
-		// TODO extract Envelope here, and use in later methods
-		
-		String sender = getSenderOfMessage(inMsg);
-		Message message = getMessageContent(inMsg);
-		sendAck(sender);
-		
-		// dispatch handling to a separate thread, which might add an outgoing message later, using the send() method
-		this.consumer.accept(sender, message);
-//		executor.execute(() -> this.consumer.accept(message));
+	public ServerConnection(String address, BiConsumer<String, Message> consumer) {
+		this(address, consumer, new XStreamCodec<Envelope<Message>>());
 	}
 	
-	private Message getMessageContent(String inMsg) {
-		// TODO convert to envelope using Gson, and extract payload
-		// TODO implement
-		return null;
-	}
-
-	private String getSenderOfMessage(String inMsg) {
-		// TODO convert to envelope using Gson, and extract sender
-		// TODO implement
-		return "";
+	/**
+	 * Do actual sending, with validation of arrival at the receiver side, re-sending periodically, until an ACK is received.
+	 * 
+	 * @param env Envelope to be sent.
+	 */
+	private void safeSend(Envelope<Message> env) {
+		this.gotAck = false;
+		
+		synchronized (this.ackNotifier) {
+			do {
+				try {
+					this.messenger.send(env.address, this.codec.encode(env));
+					this.ackNotifier.wait(ACK_TIMEOUT_IN_MILLISECONDS);
+				} catch (MessengerException e) {
+					throw new RuntimeException(e);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			} while (!this.gotAck);
+		}
 	}
 
 	/**
@@ -114,9 +110,27 @@ public class ServerConnection<Message> {
 	 * can move on to the next outgoing message.
 	 */
 	private void receivedAck() {
-		this.ackNotifier.notify();
+		synchronized (ackNotifier) {
+			this.gotAck = true;
+			ackNotifier.notify();
+		}
 	}
-
+	
+	/**
+	 * Handle an incoming message, that is NOT an ACK (e.g: has actual contents).
+	 * An ACK is sent back immediately to the sender of the message, and the message is handled using
+	 * the consumer sent to this ServerConnection upon initialization.
+	 * 	
+	 * @param msg
+	 */
+	private void handleIncomingMessage(Envelope<Message> env) { 
+		sendAck(env.address);
+		
+		// dispatch handling to a separate thread, which might add an outgoing message later, using the send() method
+		this.consumer.accept(env.address, env.payload);
+//		executor.execute(() -> this.consumer.accept(env.address, env.payload));
+	}
+	
 	/**
 	 * Receive a raw incoming message, and put it in a FIFO queue for appropriate handling. If incoming message is
 	 * an ACK, than it is handled immediately, and not pushed into the incoming message queue. 
@@ -124,21 +138,21 @@ public class ServerConnection<Message> {
 	 * @param inMsg - Raw incoming message, as received from messenger.
 	 */
 	private void receiveIncomingMessage(String inMsg) {
+		// TODO add mechanism to drop duplicate messages (in case received, sent ACK, but before other side got the ACK - 
+		// it resent the same message. use time-stamp of first sent trial of each message as sequence number.
+		
 		if (null == inMsg) {
 			throw new RuntimeException("Received a null incoming message");
 		}
 
-		if ("".equals(inMsg)) {
+		if (inMsg.equals(ACK)) {
 			receivedAck();
 			return;
 		}
-		
-		// TODO "convert" inMsg to Envelope using Gson ?
+
+		// add incoming message to queue for handling
 		try {
-			String sender = getSenderOfMessage(inMsg);
-			Message payload = getMessageContent(inMsg);
-			
-			this.incomingMessages.put(Envelope.wrap(sender, payload));
+			this.incomingMessages.put(codec.decode(inMsg));
 		} catch (InterruptedException e) {
 			System.out.println("interrupted while trying to put an incoming message in the incoming queue. ignoring it.");
 		}
@@ -164,6 +178,7 @@ public class ServerConnection<Message> {
 	private void start() {
 		this.receiver.start(); // start to take incoming messages from queue and handle them
 		this.sender.start();   // start to take outgoing messages from queue and send them one-by-one
+		this.isActive = true;
 	}
 	
 	/**
@@ -171,11 +186,10 @@ public class ServerConnection<Message> {
 	 * as well as killing its messenger.
 	 */
 	public void kill() {
-		// TODO maybe need to first clear out incoming and outgoing queues? or maybe app should take care of that
-		((Dispatcher)this.receiver).stopMe();
-		this.executor.shutdown(); // TODO consider using shutdownNow() or awaitTermination() instead
-		((Transmitter)this.sender).stopMe();
-		
+		this.receiver.stopMe();
+		this.executor.shutdown(); 
+		this.sender.stopMe();
+		this.isActive = false;
 		
 		try {
 			this.messenger.kill();
@@ -202,7 +216,7 @@ public class ServerConnection<Message> {
 	 * @param payload - Contents of message to send to the client.
 	 * @see {@link #sendAck(String to)}
 	 */
-	public void send(String to, String payload) {
+	public void send(String to, Message payload) {
 		if (null == to || "".equals(to)) {
 			throw new InvalidParameterException("recepient address was null or empty");
 		}
@@ -218,5 +232,33 @@ public class ServerConnection<Message> {
 		
 		// by here we know we are trying to send a message with contents - need to make sure it was received
 		outgoingMessages.add(Envelope.wrap(to, payload));
+	}
+	
+	/**
+	 * Get a COPY of all incoming Envelopes that were not yet handled (e.g: the incoming message queue).<br>
+	 * <b>Can only be called when connection is inactive (e.g: after calling {@link #kill})</b>
+	 * 
+	 * @return
+	 */
+	public Collection<Envelope<Message>> getUnhandeled() {
+		if (this.isActive) {
+			throw new RuntimeException("can only be called when connection is inactive.");
+		}
+		
+		return this.incomingMessages;
+	}
+	
+	/**
+	 * Get all the outgoing Envelopes that were not yet sent out.<br>
+	 * <b>Can only be called when connection is inactive (e.g: after calling {@link #kill})</b>
+	 * 
+	 * @return
+	 */
+	public Collection<Envelope<Message>> getUnsent() {
+		if (this.isActive) {
+			throw new RuntimeException("can only be called when connection is inactive.");
+		}
+		
+		return this.outgoingMessages;
 	}
 }
