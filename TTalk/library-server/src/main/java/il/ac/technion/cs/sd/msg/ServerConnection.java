@@ -2,10 +2,8 @@ package il.ac.technion.cs.sd.msg;
 
 import java.security.InvalidParameterException;
 import java.util.Collection;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.BiConsumer;
 
 public class ServerConnection<Message> {
@@ -15,8 +13,6 @@ public class ServerConnection<Message> {
 	private static final long ACK_TIMEOUT_IN_MILLISECONDS = 50L;
 	
 	// INSTANCE VARIABLES
-	private final BlockingQueue<Envelope<Message>> incomingMessages = new LinkedBlockingQueue<>();
-	private final BlockingQueue<Envelope<Message>> outgoingMessages = new LinkedBlockingQueue<>();
 	private final String address;
 	private final Messenger messenger;
 	private final BiConsumer<String, Message> consumer;
@@ -63,8 +59,8 @@ public class ServerConnection<Message> {
 		}
 		
 		this.executor = Executors.newCachedThreadPool();
-		this.receiver = new Dispatcher<Message>(this.incomingMessages, x -> handleIncomingMessage(x));
-		this.sender   = new Dispatcher<Message>(this.outgoingMessages, x -> safeSend(x));
+		this.receiver = new Dispatcher<Message>(x -> handleIncomingMessage(x));
+		this.sender   = new Dispatcher<Message>(x -> safeSend(x));
 		
 		start();
 	}
@@ -127,7 +123,6 @@ public class ServerConnection<Message> {
 		
 		// dispatch handling to a separate thread, which might add an outgoing message later, using the send() method
 		this.consumer.accept(env.address, env.payload);
-//		executor.execute(() -> this.consumer.accept(env.address, env.payload));
 	}
 	
 	/**
@@ -151,7 +146,7 @@ public class ServerConnection<Message> {
 
 		// add incoming message to queue for handling
 		try {
-			this.incomingMessages.put(codec.decode(inMsg));
+			this.receiver.enqueue(codec.decode(inMsg));
 		} catch (InterruptedException e) {
 			System.out.println("interrupted while trying to put an incoming message in the incoming queue. ignoring it.");
 		}
@@ -230,7 +225,12 @@ public class ServerConnection<Message> {
 		}
 		
 		// by here we know we are trying to send a message with contents - need to make sure it was received
-		outgoingMessages.add(Envelope.wrap(to, payload));
+		try {
+			this.sender.enqueue(Envelope.wrap(to, payload));
+		} catch (InterruptedException e) {
+			System.out.println("interrupted while trying to enqueue envelope in sender");
+			e.printStackTrace();
+		}
 	}
 	
 	/**
@@ -244,7 +244,7 @@ public class ServerConnection<Message> {
 			throw new RuntimeException("can only be called when connection is inactive.");
 		}
 		
-		return this.incomingMessages;
+		return this.receiver.getUnhandled();
 	}
 	
 	/**
@@ -258,6 +258,6 @@ public class ServerConnection<Message> {
 			throw new RuntimeException("can only be called when connection is inactive.");
 		}
 		
-		return this.outgoingMessages;
+		return this.sender.getUnhandled();
 	}
 }
