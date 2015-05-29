@@ -43,7 +43,6 @@ public class Connection<Message> {
 		}
 		
 		this.factory   = (null != factory) ? factory : new MessengerFactory();
-		this.messenger = startMessenger(myAddress); // must be after factory initialization
 		this.myAddress = myAddress;
 		this.executor  = Executors.newCachedThreadPool(); // TODO maybe get rid of this
 		this.receiver  = new Dispatcher<Message>(x -> { sendAck(x.address); handler.accept(x);; } );
@@ -244,11 +243,11 @@ public class Connection<Message> {
 			this.sender.start();   // start to take outgoing messages from queue and send them one-by-one
 		}
 		
-		this.receiver.unpause();
-		this.sender.unpause();
 		this.messenger = startMessenger(myAddress);
 		this.started = true;
 		this.isActive = true;
+		this.receiver.unpause();
+		this.sender.unpause();
 	}
 	
 	
