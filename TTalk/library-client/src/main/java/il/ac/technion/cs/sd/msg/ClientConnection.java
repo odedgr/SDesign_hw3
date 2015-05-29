@@ -55,6 +55,11 @@ public class ClientConnection<Message> extends Connection<Message> {
 		this.consumer.accept(env.payload);
 	}
 	
+	public void send(Message payload) {
+		super.send(this.myServer, payload);
+	}
+	
+	
 	/**
 	 * Terminate this connection. Stops all handling of incoming messages, receiving and sending messages,
 	 * as well as killing its messenger.

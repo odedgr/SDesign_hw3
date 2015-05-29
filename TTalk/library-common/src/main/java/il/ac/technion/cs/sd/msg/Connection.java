@@ -58,7 +58,7 @@ public abstract class Connection<Message> {
 	 * @param payload - Contents of message to send to the client.
 	 * @see {@link #sendAck(String to)}
 	 */
-	public void send(String to, Message payload) {
+	protected void send(String to, Message payload) {
 		if (null == to || "".equals(to)) {
 			throw new InvalidParameterException("recepient address was null or empty");
 		}
@@ -228,6 +228,10 @@ public abstract class Connection<Message> {
 	 */
 	public String myAddress() {
 		return this.myAddress;
+	}
+	
+	public long getAckTimeout() {
+		return ACK_TIMEOUT_IN_MILLISECONDS;
 	}
 	
 }

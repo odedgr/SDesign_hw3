@@ -49,6 +49,11 @@ public class ServerConnection<Message> extends Connection<Message> {
 		this.consumer.accept(env.address, env.payload);
 	}
 	
+	@Override
+	public void send(String to, Message payload) {
+		super.send(to, payload);
+	}
+		
 	/**
 	 * Terminate this connection. Stops all handling of incoming messages, receiving and sending messages,
 	 * as well as killing its messenger.
