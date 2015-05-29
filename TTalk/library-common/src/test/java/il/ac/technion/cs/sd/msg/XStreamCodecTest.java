@@ -8,7 +8,7 @@ import org.junit.Test;
 
 
 
-public class XmlCodecTest {
+public class XStreamCodecTest {
 	
 	@Test
 	public void testEncodeDecodeInt() {

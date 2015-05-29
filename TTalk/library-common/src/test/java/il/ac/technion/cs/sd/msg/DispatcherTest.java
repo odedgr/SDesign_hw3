@@ -177,10 +177,14 @@ public class DispatcherTest {
 		for (Thread p : producers) { p.join(); }
 		
 		disp.start();
+		List<Integer> dispInitJobs = disp.getUnhandled()
+				.stream()
+				.map(x -> (Integer)x.payload)
+				.collect(Collectors.toList());
 		
 		disp.waitUntilEmpty();
 		
-		System.out.println(handledJobs.toString());
+		assertEquals(dispInitJobs, handledJobs);
 	}
 	
 	
