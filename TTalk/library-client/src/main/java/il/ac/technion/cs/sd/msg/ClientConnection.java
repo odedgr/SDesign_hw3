@@ -32,10 +32,21 @@ public class ClientConnection<Message> {
 		this.conn = new Connection<Message>(myAddress, codec, x -> handleIncomingMessage(x));
 		this.myServer = serverAddress;
 		this.consumer = consumer;
-		
-		conn.start();
+	}
+	
+	
+	// TODO document
+	public void start() {
+		this.conn.start();
+	}
+	
+	
+	// TODO document
+	public void stop() {
+		this.conn.stop();
 	}
 
+	
 	/**
 	 * Constructor. Creates and starts a running connection, accepting and handling incoming messages as well as
 	 * sending back outgoing replies, using the default {@link Codec}.
@@ -50,7 +61,14 @@ public class ClientConnection<Message> {
 		this(serverAddress, myAddress, consumer, new XStreamCodec<Envelope<Message>>());
 	}
 	
-	protected void handleIncomingMessage(Envelope<Message> env) { 
+	/**
+	 * Handle an incoming message, that is NOT an ACK (e.g: has actual contents).
+	 * An ACK is implicitly sent back immediately to the sender of the message, and the message is handled using
+	 * the consumer given to this ServerConnection upon initialization.
+	 * 	
+	 * @param env - Envelope containing the incoming message to be handled.
+	 */
+	private void handleIncomingMessage(Envelope<Message> env) { 
 		// dispatch handling to a separate thread, which might add an outgoing message later, using the send() method
 		this.consumer.accept(env.payload);
 	}

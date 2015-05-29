@@ -10,8 +10,10 @@ import java.util.function.Consumer;
 public class Dispatcher<Message> extends Thread {
 	private final BlockingQueue<Envelope<Message>> queue;
 	private final Consumer<Envelope<Message>> consumer;
-	private boolean isActive = false;
+	private boolean isAlive = false;
+	private boolean isPaused = false;
 	private boolean stopped = false; // only set to 'true' after started and was killed
+	private Object pauseFlag = new Object();
 	
 	/**
 	 * Create a Dispatcher, for handling each message in the supplied queue, by order of insertion.
@@ -40,10 +42,17 @@ public class Dispatcher<Message> extends Thread {
 	
 	@Override
 	public void run() {
-		this.isActive = true;
+		this.isAlive = true;
 		
-		while (isActive) {
+		while (isAlive) {
+			
 			try {
+				if (this.isPaused) { // when pause() is called, dispatcher will wait until unpause() is called, notifying
+					synchronized (this.pauseFlag) {
+						this.pauseFlag.wait();
+					}
+				}
+				
 				synchronized (this.queue) { // sync for completing handling when dispatcher is stopped
 					Envelope<Message> env = this.queue.poll(50L, TimeUnit.MILLISECONDS); // don't use take(), to allow for killing
 					if (null != env) {
@@ -52,7 +61,7 @@ public class Dispatcher<Message> extends Thread {
 					}
 				}
 			} catch (InterruptedException e) {
-				if (this.isActive) {
+				if (this.isAlive) {
 					System.out.println("dispatcher thread unintentionally interrupted.");
 				}
 			}
@@ -63,15 +72,35 @@ public class Dispatcher<Message> extends Thread {
 	 * Cleanly stops the dispatcher, allowing for a single Message to complete its handling.
 	 */
 	public void kill() {
-//		System.out.println("stopping dispatcher.");
-		this.isActive = false;
-		
+		this.isAlive = false;
 		
 		synchronized (this.queue) { // allow for in-handling message to complete
 			this.interrupt(); 
 		}
 		
 		this.stopped = true;
+	}
+	
+	// TODO document
+	public void pause() {
+		if (!this.isAlive) {
+			throw new RuntimeException("can only pause a started dispatcher");
+		}
+		
+		this.isPaused = true; // don't care if already paused
+	}
+	
+	// TODO document
+	public void unpause() {
+		if (!this.isAlive) { // catches cases where dispatcher was already stopped as well
+			throw new RuntimeException("can only unpause a live (already started, not yet killed) dispatcher");
+		}
+		
+		synchronized (this.pauseFlag) {
+			this.pauseFlag.notify();
+		}
+		
+		this.isPaused = false;
 	}
 
 	/**
@@ -89,6 +118,7 @@ public class Dispatcher<Message> extends Thread {
 			throw new RuntimeException("cannot enqueue after dispatcher was killed");
 		}
 
+//		System.out.println("enqueued " + env.toString());
 		this.queue.put(env);
 	}
 	
@@ -105,7 +135,7 @@ public class Dispatcher<Message> extends Thread {
 	}
 	
 	public boolean isActive() {
-		return this.isActive;
+		return this.isAlive;
 	}
 	
 	public void waitUntilEmpty() {

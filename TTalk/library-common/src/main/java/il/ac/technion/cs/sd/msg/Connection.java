@@ -1,7 +1,5 @@
 package il.ac.technion.cs.sd.msg;
 
-
-import java.security.InvalidParameterException;
 import java.util.Collection;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -9,7 +7,7 @@ import java.util.function.Consumer;
 
 
 public class Connection<Message> {
-//public abstract class Connection<Message> {
+
 	
 	// CONSTANTS
 	private static final String ACK = "";
@@ -18,32 +16,34 @@ public class Connection<Message> {
 	// INSTANCE VARIABLES
 	private final Dispatcher<Message> receiver; // thread taking each incoming message from queue and dispatching a handler
 	private final Dispatcher<Message> sender; // thread in charge of sending outgoing messages from queue
-	private final Messenger messenger;
+	private Messenger messenger; // can't be final, to support stop and restart
 	private final Codec<Envelope<Message>> codec;
+	private final MessengerFactory factory;
 	
 	private final String myAddress;
 	private boolean gotAck = false;
-	private boolean isActive = false;
 	private final Object ackNotifier = new Object();
+	
+	/* Connection state */
+	private boolean isActive = false; // set to 'true' upon each call to start(), 'false' upon stop() or kill()
+	private boolean started = false; // set to 'true' upon first call to start()
+	private boolean killed = false; // set to 'true' upon call to kill()
 	
 	private final ExecutorService executor; // thread pool, for message handlers using supplied consumer
 	
-	public Connection(String myAddress, Codec<Envelope<Message>> codec, Consumer<Envelope<Message>> handler) {
+	
+	// TODO document
+	public Connection(String myAddress, Codec<Envelope<Message>> codec, Consumer<Envelope<Message>> handler, MessengerFactory factory) {
 		if (null == myAddress || "".equals(myAddress)) {
-			throw new InvalidParameterException("invalid server address - empty or null");
+			throw new IllegalArgumentException("invalid server address - empty or null");
 		}
 		
 		if (null == codec) {
-			throw new InvalidParameterException("got null codec");
+			throw new IllegalArgumentException("got null codec");
 		}
 		
-		try {
-			messenger = new MessengerFactory().start(myAddress, x -> receiveIncomingMessage(x));
-		} catch (MessengerException e) {
-			System.out.println(e.getMessage());
-			throw new RuntimeException(e);
-		}
-		
+		this.factory   = (null != factory) ? factory : new MessengerFactory();
+		this.messenger = startMessenger(myAddress); // must be after factory initialization
 		this.myAddress = myAddress;
 		this.executor  = Executors.newCachedThreadPool(); // TODO maybe get rid of this
 		this.receiver  = new Dispatcher<Message>(x -> { sendAck(x.address); handler.accept(x);; } );
@@ -51,6 +51,36 @@ public class Connection<Message> {
 		this.codec     = codec;
 	}
 	
+	
+	// TODO document
+	public Connection(String myAddress, Codec<Envelope<Message>> codec, Consumer<Envelope<Message>> handler) {
+		this(myAddress, codec, handler, null);
+	}
+
+	
+	// TODO document
+	private Messenger startMessenger(String myAddress) {
+		try {
+			return this.factory.start(myAddress, x -> receiveIncomingMessage(x));
+		} catch (MessengerException e) {
+			System.out.println(e.getMessage());
+			throw new RuntimeException(e);
+		}
+	}
+	
+	
+	// TODO document
+		private void killMessenger() { // TODO document
+			if (null != this.messenger) {
+				try {
+					this.messenger.kill();
+				} catch (MessengerException e) {
+					System.out.println("MessengerException when trying to kill messenger in Connection");
+					throw new RuntimeException(e);
+				}
+				this.messenger = null;
+			}
+		}
 	
 	/**
 	 * Add an outgoing message to a client (either with or without content) to the outgoing message queue. 
@@ -62,11 +92,15 @@ public class Connection<Message> {
 	 */
 	protected void send(String to, Message payload) {
 		if (null == to || "".equals(to)) {
-			throw new InvalidParameterException("recepient address was null or empty");
+			throw new IllegalArgumentException("recepient address was null or empty");
 		}
 		
 		if (null == payload) {
-			throw new InvalidParameterException("payload to send was null");
+			throw new IllegalArgumentException("payload to send was null");
+		}
+		
+		if (!this.isActive) {
+			throw new RuntimeException("cannot send when connection is inactive");
 		}
 		
 		if (ACK.equals(payload)) { // send an ACK - no need to wait for incoming ACK in return
@@ -95,6 +129,7 @@ public class Connection<Message> {
 		synchronized (this.ackNotifier) {
 			do {
 				try {
+//					System.out.println("sending...");
 					this.messenger.send(env.address, this.codec.encode(env));
 					this.ackNotifier.wait(ACK_TIMEOUT_IN_MILLISECONDS);
 				} catch (MessengerException e) {
@@ -107,27 +142,20 @@ public class Connection<Message> {
 	}
 	
 	/**
-	 * Handle an incoming message, that is NOT an ACK (e.g: has actual contents).
-	 * An ACK is implicitly sent back immediately to the sender of the message, and the message is handled using
-	 * the consumer given to this ServerConnection upon initialization.
-	 * 	
-	 * @param env - Envelope containing the incoming message to be handled.
-	 */
-//	protected abstract void handleIncomingMessage(Envelope<Message> env); // TODO update documentation
-	
-	/**
 	 * Sends an ACK (empty string) to a given address, guaranteed to be received by the recipient.
 	 * 
 	 * @param to - Address of the ACK receiver.
 	 */
 	public void sendAck(String to) {
 		try {
+			System.out.println("seding ACK");
 			this.messenger.send(to, ACK);
 		} catch (MessengerException e) {
 			System.out.println("DEBUG - ServerConnection.sendAck() - MessengerException when tried to send ACK to " + to);
 			throw new RuntimeException(e);
 		}
 	}
+	
 	
 	/**
 	 * Handles a received ACK. Used to notify the transmitter thread that an awaited ACK has been received and it
@@ -168,6 +196,7 @@ public class Connection<Message> {
 		}
 	}
 	
+	
 	/**
 	 * Get a COPY of all incoming Envelopes that were not yet handled (e.g: the incoming message queue).<br>
 	 * <b>Can only be called when connection is inactive (e.g: after calling {@link #kill})</b>
@@ -181,6 +210,7 @@ public class Connection<Message> {
 		
 		return this.receiver.getUnhandled();
 	}
+	
 	
 	/**
 	 * Get all the outgoing Envelopes that were not yet sent out.<br>
@@ -196,32 +226,59 @@ public class Connection<Message> {
 		return this.sender.getUnhandled();
 	}
 	
+	
 	/**
-	 * Starts this ServerConnection, enabling it to send and receive messages.
+	 * Starts this Connection, enabling it to send and receive messages.
 	 */
-	protected void start() {
-		this.receiver.start(); // start to take incoming messages from queue and handle them
-		this.sender.start();   // start to take outgoing messages from queue and send them one-by-one
+	synchronized public void start() {
+		if (this.isActive) { // already started - ignoring call
+			return;
+		}
+		
+		if (this.killed) {
+			throw new RuntimeException("can only start a connection that was has never started before, or was stopped, but not if it was killed");
+		}
+		
+		if (!this.started) {
+			this.receiver.start(); // start to take incoming messages from queue and handle them
+			this.sender.start();   // start to take outgoing messages from queue and send them one-by-one
+		}
+		
+		this.receiver.unpause();
+		this.sender.unpause();
+		this.messenger = startMessenger(myAddress);
+		this.started = true;
 		this.isActive = true;
 	}
+	
+	
+	// TODO document
+	synchronized public void stop() {
+		if (!this.isActive) { // already stopped - ignoring call
+			return;
+		}
+		
+		this.receiver.pause();
+		this.sender.pause();
+		killMessenger();
+		this.isActive = false;
+	}
+	
 	
 	/**
 	 * Terminate this connection. Stops all handling of incoming messages, receiving and sending messages,
 	 * as well as killing its messenger.
 	 */
-	public void kill() {
+	synchronized public void kill() {
 		this.receiver.kill();
 		this.sender.kill();
 		this.isActive = false;
+		this.killed  = true;
 		this.executor.shutdown();
 		
-		try {
-			this.messenger.kill();
-		} catch (MessengerException e) {
-			System.out.println("MessengerException when trying to kill it from ServerConnection.kill()");
-			throw new RuntimeException(e);
-		}
+		killMessenger();
 	}
+	
 	
 	/**
 	 * Get this Connection's address.
@@ -232,8 +289,16 @@ public class Connection<Message> {
 		return this.myAddress;
 	}
 	
+	
+	// TODO document
 	public long getAckTimeout() {
 		return ACK_TIMEOUT_IN_MILLISECONDS;
+	}
+
+
+	// TODO document
+	public boolean isAlive() {
+		return this.isActive;
 	}
 	
 }

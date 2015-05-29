@@ -19,16 +19,24 @@ public class ServerConnection<Message> {
 	 * @param codec - Custom codec for encoding/decoding messages.
 	 */
 	public ServerConnection(String address, BiConsumer<String, Message> consumer, Codec<Envelope<Message>> codec) {
-//		super(address, codec, x-> handleIncominigMessage(x));
-		
 		if (null == consumer) {
 			throw new IllegalArgumentException("got null consumer");
 		}
 		
 		this.conn = new Connection<Message>(address, codec, x->handleIncomingMessage(x));
 		this.consumer = consumer;
-		
-		conn.start();
+	}
+
+	
+	// TODO document
+	public void start() {
+		this.conn.start();
+	}
+	
+	
+	// TODO document
+	public void stop() {
+		this.conn.stop();
 	}
 	
 	/**
@@ -44,8 +52,14 @@ public class ServerConnection<Message> {
 		this(address, consumer, new XStreamCodec<Envelope<Message>>());
 	}
 	
-	
-	protected void handleIncomingMessage(Envelope<Message> env) { 
+	/**
+	 * Handle an incoming message, that is NOT an ACK (e.g: has actual contents).
+	 * An ACK is implicitly sent back immediately to the sender of the message, and the message is handled using
+	 * the consumer given to this ServerConnection upon initialization.
+	 * 	
+	 * @param env - Envelope containing the incoming message to be handled.
+	 */
+	private void handleIncomingMessage(Envelope<Message> env) { 
 		// dispatch handling to a separate thread, which might add an outgoing message later, using the send() method
 		this.consumer.accept(env.address, env.payload);
 	}
