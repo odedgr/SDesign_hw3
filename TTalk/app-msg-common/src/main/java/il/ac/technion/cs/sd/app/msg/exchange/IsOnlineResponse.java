@@ -16,16 +16,16 @@ public class IsOnlineResponse implements Exchange {
 	/**
 	 * The response whether the user is online (or empty if the requesting user is not a friend). 
 	 */
-	final public Optional<Boolean> response;
+	final public Optional<Boolean> answer;
 	
 	/**
 	 * Create a new IsOnlineResponse.
 	 * @param who the name of the client that is asked if online.
-	 * @param response the response to the request.
+	 * @param answer the answer to the request.
 	 */
-	public IsOnlineResponse(String who, Optional<Boolean> response) {
+	public IsOnlineResponse(String who, Optional<Boolean> answer) {
 		this.who = who;
-		this.response = response;
+		this.answer = answer;
 	}
 
 	@Override

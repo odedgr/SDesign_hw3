@@ -1,6 +1,17 @@
 package il.ac.technion.cs.sd.app.msg;
 
+import il.ac.technion.cs.sd.app.msg.exchange.ConnectRequest;
+import il.ac.technion.cs.sd.app.msg.exchange.DisconnectRequest;
+import il.ac.technion.cs.sd.app.msg.exchange.Exchange;
+import il.ac.technion.cs.sd.app.msg.exchange.FriendRequest;
+import il.ac.technion.cs.sd.app.msg.exchange.FriendResponse;
+import il.ac.technion.cs.sd.app.msg.exchange.IsOnlineRequest;
+import il.ac.technion.cs.sd.app.msg.exchange.IsOnlineResponse;
+import il.ac.technion.cs.sd.app.msg.exchange.SendInstantMessageRequest;
+import il.ac.technion.cs.sd.msg.ClientConnection;
+
 import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -11,6 +22,16 @@ import java.util.function.Function;
  */
 public class ClientMsgApplication {
 	
+	final String username;
+	
+	ClientConnection<Exchange> connection;
+	
+	BlockingQueue<Optional<Boolean>> isOnlineResponseQueue;
+	
+	Consumer<InstantMessage> messageConsumer;
+	Function<String, Boolean> friendshipRequestHandler;
+	BiConsumer<String, Boolean> friendshipReplyConsumer;
+	
 	/**
 	 * Creates a new application, tied to a single user
 	 * 
@@ -18,7 +39,39 @@ public class ClientMsgApplication {
 	 * @param username The username that will be sending and accepting the messages using this object
 	 */
 	public ClientMsgApplication(String serverAddress, String username) {
-		throw new UnsupportedOperationException("Not implemented");
+		if (serverAddress == null || serverAddress.isEmpty() || username == null || username.isEmpty()) {
+			throw new IllegalArgumentException();
+		}
+		
+		this.username = username;
+		this.connection = new ClientConnection<Exchange>(serverAddress, username, message -> message.accept(new Visitor()));
+	}
+	
+	/**
+	 * Creates a client mail application that uses a given mock connection.
+	 * Used for testing purposes.
+	 * @param username The username that will be sending and accepting the messages using this object.
+	 * @param connection The mock connection to use.
+	 * @return
+	 */
+	static ClientMsgApplication createWithMockConnection(String username, ClientConnection<Exchange> connection) {
+		if (username == null || username.isEmpty() || connection == null) {
+			throw new IllegalArgumentException();
+		}
+		return new ClientMsgApplication(username, connection);
+	}
+	
+	/**
+	 * Creates a new client application that uses given connection.
+	 * @param username
+	 * @param connection
+	 */
+	private ClientMsgApplication(String username, ClientConnection<Exchange> connection) {
+		if (username == null || username.isEmpty() || connection == null) {
+			throw new IllegalArgumentException();
+		}
+		this.username = username;
+		this.connection = connection;
 	}
 	
 	/**
@@ -35,7 +88,11 @@ public class ClientMsgApplication {
 	public void login(Consumer<InstantMessage> messageConsumer,
 			Function<String, Boolean> friendshipRequestHandler,
 			BiConsumer<String, Boolean> friendshipReplyConsumer) {
-		throw new UnsupportedOperationException("Not implemented");
+		
+		connection.send(new ConnectRequest());
+		this.messageConsumer = messageConsumer;
+		this.friendshipRequestHandler = friendshipRequestHandler;
+		this.friendshipReplyConsumer = friendshipReplyConsumer;
 	}
 	
 	/**
@@ -43,7 +100,7 @@ public class ClientMsgApplication {
 	 * messages. A client can login (using {@link ClientMsgApplication#login(Consumer, Function, BiConsumer)} after logging out.
 	 */
 	public void logout() {
-		throw new UnsupportedOperationException("Not implemented");
+		connection.send(new DisconnectRequest());
 	}
 	
 	/**
@@ -53,7 +110,7 @@ public class ClientMsgApplication {
 	 * @param what The message to send
 	 */
 	public void sendMessage(String target, String what) {
-		throw new UnsupportedOperationException("Not implemented");
+		connection.send(new SendInstantMessageRequest(new InstantMessage(username, target, what)));
 	}
 	
 	/**
@@ -65,7 +122,7 @@ public class ClientMsgApplication {
 	 * @param who The recipient of the friend request.
 	 */
 	public void requestFriendship(String who) {
-		throw new UnsupportedOperationException("Not implemented");
+		connection.send(new FriendRequest(new FriendInvitation(username, who)));
 	}
 	
 	/**
@@ -76,7 +133,13 @@ public class ClientMsgApplication {
 	 *         user is a friend and is offline; an empty {@link Optional} if the user isn't a friend of the client
 	 */
 	public Optional<Boolean> isOnline(String who) {
-		throw new UnsupportedOperationException("Not implemented");
+		connection.send(new IsOnlineRequest(who));
+		try {
+			// Wait for a response which would arrive asynchronously.
+			return isOnlineResponseQueue.take();
+		} catch (InterruptedException e) {
+			throw new RuntimeException(e);
+		}
 	}
 	
     /**
@@ -85,7 +148,52 @@ public class ClientMsgApplication {
      * You can assume that a stopped client won't be restarted using {@link ClientMsgApplication#login(Consumer, Function, BiConsumer)}
      */
     public void stop() {
-            throw new UnsupportedOperationException("Not implemented");
+    	connection.kill();
     }
+    
+    class Visitor implements ExchangeVisitor {
 
+		@Override
+		public void visit(ConnectRequest request) {
+			throw new UnsupportedOperationException("The client should not get ConnectRequest.");
+		}
+
+		@Override
+		public void visit(DisconnectRequest request) {
+			throw new UnsupportedOperationException("The client should not get DisconnectRequest.");
+			
+		}
+
+		@Override
+		public void visit(SendInstantMessageRequest request) {
+			throw new UnsupportedOperationException("The client should not get SendInstantMessageRequest.");
+		}
+
+		@Override
+		public void visit(FriendRequest request) {
+			boolean answer = friendshipRequestHandler.apply(request.invitation.from);
+			connection.send(new FriendResponse(request.invitation, answer));
+		}
+
+		@Override
+		public void visit(FriendResponse response) {
+			friendshipReplyConsumer.accept(response.invitation.to, response.isAccepted);
+		}
+
+		@Override
+		public void visit(IsOnlineRequest request) {
+			throw new UnsupportedOperationException("The client should not get IsOnlineRequest.");
+		}
+
+		@Override
+		public void visit(IsOnlineResponse response) {
+			try {
+				// Answer and notify isOnline method to return an answer.
+				isOnlineResponseQueue.put(response.answer);
+			} catch (InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		}
+    	
+    }
 }
