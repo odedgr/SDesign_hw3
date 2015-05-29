@@ -2,9 +2,10 @@ package il.ac.technion.cs.sd.msg;
 
 import java.util.function.Consumer;
 
-public class ClientConnection<Message> extends Connection<Message> {
+public class ClientConnection<Message> {
 	
 	// INSTANCE VARIABLES
+	private final Connection<Message> conn;
 	private final Consumer<Message> consumer;
 	private final String myServer;
 	
@@ -19,7 +20,6 @@ public class ClientConnection<Message> extends Connection<Message> {
 	 * @param codec - Custom codec for encoding/decoding messages.
 	 */
 	public ClientConnection(String serverAddress, String myAddress, Consumer<Message> consumer, Codec<Envelope<Message>> codec) {
-		super(myAddress, codec);
 
 		if (null == serverAddress || "".equals(serverAddress)) {
 			throw new IllegalArgumentException("invalid server address - empty or null");
@@ -29,10 +29,11 @@ public class ClientConnection<Message> extends Connection<Message> {
 			throw new IllegalArgumentException("got null consumer");
 		}
 		
+		this.conn = new Connection<Message>(myAddress, codec, x -> handleIncomingMessage(x));
 		this.myServer = serverAddress;
 		this.consumer = consumer;
 		
-		start();
+		conn.start();
 	}
 
 	/**
@@ -49,14 +50,13 @@ public class ClientConnection<Message> extends Connection<Message> {
 		this(serverAddress, myAddress, consumer, new XStreamCodec<Envelope<Message>>());
 	}
 	
-	@Override 
 	protected void handleIncomingMessage(Envelope<Message> env) { 
 		// dispatch handling to a separate thread, which might add an outgoing message later, using the send() method
 		this.consumer.accept(env.payload);
 	}
 	
 	public void send(Message payload) {
-		super.send(this.myServer, payload);
+		conn.send(this.myServer, payload);
 	}
 	
 	
@@ -65,7 +65,7 @@ public class ClientConnection<Message> extends Connection<Message> {
 	 * as well as killing its messenger.
 	 */
 	public void kill() {
-		super.kill();
+		conn.kill();
 	}
 	
 	/**

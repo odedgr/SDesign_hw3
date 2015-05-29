@@ -5,9 +5,11 @@ import java.security.InvalidParameterException;
 import java.util.Collection;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 
-public abstract class Connection<Message> {
+public class Connection<Message> {
+//public abstract class Connection<Message> {
 	
 	// CONSTANTS
 	private static final String ACK = "";
@@ -26,7 +28,7 @@ public abstract class Connection<Message> {
 	
 	private final ExecutorService executor; // thread pool, for message handlers using supplied consumer
 	
-	public Connection(String myAddress, Codec<Envelope<Message>> codec) {
+	public Connection(String myAddress, Codec<Envelope<Message>> codec, Consumer<Envelope<Message>> handler) {
 		if (null == myAddress || "".equals(myAddress)) {
 			throw new InvalidParameterException("invalid server address - empty or null");
 		}
@@ -44,7 +46,7 @@ public abstract class Connection<Message> {
 		
 		this.myAddress = myAddress;
 		this.executor  = Executors.newCachedThreadPool(); // TODO maybe get rid of this
-		this.receiver  = new Dispatcher<Message>(x -> { sendAck(x.address); handleIncomingMessage(x); } );
+		this.receiver  = new Dispatcher<Message>(x -> { sendAck(x.address); handler.accept(x);; } );
 		this.sender    = new Dispatcher<Message>(x -> safeSend(x));
 		this.codec     = codec;
 	}
@@ -111,7 +113,7 @@ public abstract class Connection<Message> {
 	 * 	
 	 * @param env - Envelope containing the incoming message to be handled.
 	 */
-	protected abstract void handleIncomingMessage(Envelope<Message> env); // TODO update documentation
+//	protected abstract void handleIncomingMessage(Envelope<Message> env); // TODO update documentation
 	
 	/**
 	 * Sends an ACK (empty string) to a given address, guaranteed to be received by the recipient.

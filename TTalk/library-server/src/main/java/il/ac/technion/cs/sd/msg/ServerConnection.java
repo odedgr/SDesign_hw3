@@ -2,9 +2,10 @@ package il.ac.technion.cs.sd.msg;
 
 import java.util.function.BiConsumer;
 
-public class ServerConnection<Message> extends Connection<Message> {
+public class ServerConnection<Message> {
 
 	// INSTANCE VARIABLES
+	private final Connection<Message> conn;
 	private final BiConsumer<String, Message> consumer;
 	
 	/**
@@ -18,15 +19,16 @@ public class ServerConnection<Message> extends Connection<Message> {
 	 * @param codec - Custom codec for encoding/decoding messages.
 	 */
 	public ServerConnection(String address, BiConsumer<String, Message> consumer, Codec<Envelope<Message>> codec) {
-		super(address, codec);
+//		super(address, codec, x-> handleIncominigMessage(x));
 		
 		if (null == consumer) {
 			throw new IllegalArgumentException("got null consumer");
 		}
 		
+		this.conn = new Connection<Message>(address, codec, x->handleIncomingMessage(x));
 		this.consumer = consumer;
 		
-		start();
+		conn.start();
 	}
 	
 	/**
@@ -43,15 +45,13 @@ public class ServerConnection<Message> extends Connection<Message> {
 	}
 	
 	
-	@Override
 	protected void handleIncomingMessage(Envelope<Message> env) { 
 		// dispatch handling to a separate thread, which might add an outgoing message later, using the send() method
 		this.consumer.accept(env.address, env.payload);
 	}
 	
-	@Override
 	public void send(String to, Message payload) {
-		super.send(to, payload);
+		conn.send(to, payload);
 	}
 		
 	/**
@@ -59,7 +59,7 @@ public class ServerConnection<Message> extends Connection<Message> {
 	 * as well as killing its messenger.
 	 */
 	public void kill() {
-		super.kill();
+		conn.kill();
 	}
 	
 }
