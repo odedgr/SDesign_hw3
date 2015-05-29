@@ -27,17 +27,19 @@ public class ServerMailApplication {
 	private ServerData data = new ServerData();
 	private DataSaver<ServerData> dataSaver;
 	
-    /**
+    // TODO: add createWithMockConnection factory method. 
+	
+	/**
      * Starts a new mail server. Servers with the same name retain all their information until
      * {@link ServerMailApplication#clean()} is called.
      *
      * @param name The name of the server by which it is known.
      */
-
 	public ServerMailApplication(String name) {
 		this.address = name;
 		this.data = new ServerData();
 		this.dataSaver = new FileDataSaver<ServerData>("app-msg-data-" + address);
+		this.connection = new ServerConnection<Exchange>(address, (sender, message) -> message.accept(new Visitor(sender)));
 	}
 	
 	/**
@@ -52,7 +54,7 @@ public class ServerMailApplication {
 	 * This should be a <b>non-blocking</b> call.
 	 */
 	public void start() {
-		connection = new ServerConnection<Exchange>(address, (sender, message) -> message.accept(new Visitor(sender)));
+		connection.start();
 		loadData();
 	}
 	
@@ -60,6 +62,7 @@ public class ServerMailApplication {
 	 * Stops the server. A stopped server can't accept messages, but doesn't delete any data (messages that weren't received).
 	 */
 	public void stop() {
+		connection.stop();
 		connection.kill();
 		saveData();
 	}
@@ -81,7 +84,7 @@ public class ServerMailApplication {
 	}
 	
 	/**
-	 * Load a previously stored data to the server.
+	 * Load a previously stored data to the server. Returns empty serverData if there is no previously saved data.
 	 */
 	private void loadData() {
 		Optional<ServerData> loaded_data = dataSaver.load();

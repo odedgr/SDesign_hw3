@@ -90,6 +90,8 @@ public class ClientMsgApplication {
 			Function<String, Boolean> friendshipRequestHandler,
 			BiConsumer<String, Boolean> friendshipReplyConsumer) {
 		
+		connection.start();
+		
 		connection.send(new ConnectRequest());
 		this.messageConsumer = messageConsumer;
 		this.friendshipRequestHandler = friendshipRequestHandler;
@@ -102,6 +104,7 @@ public class ClientMsgApplication {
 	 */
 	public void logout() {
 		connection.send(new DisconnectRequest());
+		connection.stop();
 	}
 	
 	/**
