@@ -2,6 +2,7 @@ package il.ac.technion.cs.sd.app.msg;
 
 import il.ac.technion.cs.sd.app.msg.exchange.ConnectRequest;
 import il.ac.technion.cs.sd.app.msg.exchange.DisconnectRequest;
+import il.ac.technion.cs.sd.app.msg.exchange.ExchangeList;
 import il.ac.technion.cs.sd.app.msg.exchange.FriendRequest;
 import il.ac.technion.cs.sd.app.msg.exchange.FriendResponse;
 import il.ac.technion.cs.sd.app.msg.exchange.IsOnlineRequest;
@@ -55,4 +56,10 @@ public interface ExchangeVisitor {
 	 * @param response the IsOnlineResponse to handle.
 	 */
 	void visit(IsOnlineResponse response);
+
+	/**
+	 * Accept and handle a list of exchanges.
+	 * @param exchangeList
+	 */
+	void visit(ExchangeList exchangeList);
 }

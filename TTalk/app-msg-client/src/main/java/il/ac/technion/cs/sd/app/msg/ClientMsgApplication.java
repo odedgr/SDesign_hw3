@@ -3,6 +3,7 @@ package il.ac.technion.cs.sd.app.msg;
 import il.ac.technion.cs.sd.app.msg.exchange.ConnectRequest;
 import il.ac.technion.cs.sd.app.msg.exchange.DisconnectRequest;
 import il.ac.technion.cs.sd.app.msg.exchange.Exchange;
+import il.ac.technion.cs.sd.app.msg.exchange.ExchangeList;
 import il.ac.technion.cs.sd.app.msg.exchange.FriendRequest;
 import il.ac.technion.cs.sd.app.msg.exchange.FriendResponse;
 import il.ac.technion.cs.sd.app.msg.exchange.IsOnlineRequest;
@@ -192,6 +193,14 @@ public class ClientMsgApplication {
 				isOnlineResponseQueue.put(response.answer);
 			} catch (InterruptedException e) {
 				throw new RuntimeException(e);
+			}
+		}
+
+		@Override
+		public void visit(ExchangeList exchangeList) {
+			// Go over all messages in the list and visit them.
+			for (Exchange exchange : exchangeList.list) {
+				exchange.accept(this);
 			}
 		}
     	

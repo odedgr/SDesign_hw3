@@ -1,10 +1,12 @@
 package il.ac.technion.cs.sd.app.msg;
 
+import java.util.List;
 import java.util.Optional;
 
 import il.ac.technion.cs.sd.app.msg.exchange.ConnectRequest;
 import il.ac.technion.cs.sd.app.msg.exchange.DisconnectRequest;
 import il.ac.technion.cs.sd.app.msg.exchange.Exchange;
+import il.ac.technion.cs.sd.app.msg.exchange.ExchangeList;
 import il.ac.technion.cs.sd.app.msg.exchange.FriendRequest;
 import il.ac.technion.cs.sd.app.msg.exchange.FriendResponse;
 import il.ac.technion.cs.sd.app.msg.exchange.IsOnlineRequest;
@@ -114,6 +116,10 @@ public class ServerMailApplication {
 		@Override
 		public void visit(ConnectRequest request) {
 			data.connect(client);
+			List<Exchange> pendingMessages = data.getAndClearPendingClientMessages(client);
+			if (!pendingMessages.isEmpty()) {
+				connection.send(client, new ExchangeList(pendingMessages));
+			}
 		}
 
 		@Override
@@ -167,6 +173,11 @@ public class ServerMailApplication {
 		@Override
 		public void visit(IsOnlineResponse response) {
 			throw new UnsupportedOperationException("The server should not get IsOnlineResponse.");
+		}
+
+		@Override
+		public void visit(ExchangeList exchangeList) {
+			throw new UnsupportedOperationException("The server should not get ExchangeList.");
 		}
 	}
 }
