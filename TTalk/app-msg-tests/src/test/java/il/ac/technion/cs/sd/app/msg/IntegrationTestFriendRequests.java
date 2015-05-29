@@ -65,6 +65,9 @@ public class IntegrationTestFriendRequests {
 		
 		client2.requestFriendship("Kippy");
 		assertEquals(new FriendshipReply("Kippy", true), replies.get("Moishe").take());
+		
+		client1.stop();
+		client2.stop();
 	}
 	
 	@Test
@@ -83,6 +86,11 @@ public class IntegrationTestFriendRequests {
 		assertEquals(new FriendshipReply("HappyHarry", true), replies.get("MadMax").take());
 		assertEquals(new FriendshipReply("HappyBarry", true), replies.get("MadMax").take());
 		assertEquals(new FriendshipReply("SadLarry", false), replies.get("MadMax").take());
+		
+		client1.stop();
+		client2.stop();
+		client3.stop();
+		client4.stop();
 	}
 
 }

@@ -47,6 +47,9 @@ public class IntegrationTestIsOnline {
 		
 		assertTrue(client1.isOnline("Gulu").get());		
 		assertTrue(client2.isOnline("Dudu").get());
+		
+		client1.stop();
+		client2.stop();
 	}
 	
 	@Test
@@ -57,7 +60,9 @@ public class IntegrationTestIsOnline {
 		
 		client2.logout();
 		
-		assertFalse(client1.isOnline("Gulu").get());		
+		assertFalse(client1.isOnline("Gulu").get());
+		
+		client1.stop();
 	}
 	
 	@Test
@@ -65,7 +70,10 @@ public class IntegrationTestIsOnline {
 		ClientMsgApplication client1 = buildClient("Dudu", s -> true);
 		ClientMsgApplication client2 = buildClient("Gulu", s -> true);
 		
-		assertFalse(client1.isOnline("Gulu").isPresent());		
+		assertFalse(client1.isOnline("Gulu").isPresent());
+		
+		client1.stop();
+		client2.stop();
 	}
 	
 	@Test
@@ -78,6 +86,9 @@ public class IntegrationTestIsOnline {
 		
 		client1.requestFriendship("Dudu");
 		assertTrue(client1.isOnline("Gulu").get());
+		
+		client1.stop();
+		client2.stop();
 	}
 	
 	@Test
@@ -91,6 +102,9 @@ public class IntegrationTestIsOnline {
 		assertFalse(client1.isOnline("Gulu").get());
 		client2.login(x -> {}, s -> true, (x,y) -> {});
 		assertTrue(client1.isOnline("Gulu").get());
+		
+		client1.stop();
+		client2.stop();
 	}
 
 }

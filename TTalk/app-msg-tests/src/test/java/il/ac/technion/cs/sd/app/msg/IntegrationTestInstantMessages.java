@@ -45,6 +45,9 @@ public class IntegrationTestInstantMessages {
 		
 		client1.sendMessage("Haim", "Hi!");
 		assertEquals(new InstantMessage("Moshe", "Haim", "Hi!"), messages.get("Haim").take());
+		
+		client1.stop();
+		client2.stop();
 	}
 	
 	@Test
@@ -59,6 +62,10 @@ public class IntegrationTestInstantMessages {
 		
 		assertEquals(new InstantMessage("Moshe", "Haim", "Hi!"), messages.get("Haim").take());
 		assertEquals(new InstantMessage("Moshe", "Noa", "Wazzup?"), messages.get("Noa").take());
+		
+		client1.stop();
+		client2.stop();
+		client3.stop();
 	}
 	
 	@Test
@@ -72,6 +79,9 @@ public class IntegrationTestInstantMessages {
 		
 		assertEquals(new InstantMessage("Moshe", "Haim", "Hi!"), messages.get("Haim").take());
 		assertEquals(new InstantMessage("Moshe", "Haim", "Nice weather, isn't it?"), messages.get("Haim").take());
+		
+		client1.stop();
+		client2.stop();
 	}
 	
 	@Test
@@ -85,5 +95,8 @@ public class IntegrationTestInstantMessages {
 		
 		assertEquals(new InstantMessage("Moshe", "Haim", "Hi!"), messages.get("Haim").take());
 		assertEquals(new InstantMessage("Haim", "Moshe", "Go away."),  messages.get("Moshe").take());
+		
+		client1.stop();
+		client2.stop();
 	}
 }
