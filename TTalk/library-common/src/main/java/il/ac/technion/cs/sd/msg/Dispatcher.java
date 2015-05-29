@@ -118,7 +118,6 @@ public class Dispatcher<Message> extends Thread {
 			throw new RuntimeException("cannot enqueue after dispatcher was killed");
 		}
 
-//		System.out.println("enqueued " + env.toString());
 		this.queue.put(env);
 	}
 	
