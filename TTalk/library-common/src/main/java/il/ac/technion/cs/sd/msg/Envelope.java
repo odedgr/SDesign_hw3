@@ -24,7 +24,13 @@ public class Envelope<Message> {
 		this.payload = payload;
 	}
 	
-	public boolean isAck() {
+	public boolean isEmptyMessage() {
 		return "".equals(this.payload);
+	}
+	
+	@Override
+	public String toString() {
+		
+		return "address = " + this.address + ", payload = " + payload.toString();
 	}
 }

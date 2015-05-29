@@ -180,9 +180,9 @@ public class ServerConnection<Message> {
 	 * as well as killing its messenger.
 	 */
 	public void kill() {
-		this.receiver.stopMe();
+		this.receiver.kill();
 		this.executor.shutdown(); 
-		this.sender.stopMe();
+		this.sender.kill();
 		this.isActive = false;
 		
 		try {
