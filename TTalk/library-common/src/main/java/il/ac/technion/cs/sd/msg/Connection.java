@@ -48,8 +48,8 @@ public class Connection<Message> {
 	private final Object ackNotifier = new Object();
 	
 	/* Connection state */
-	private boolean isActive = false; // set to 'true' upon each call to start(), 'false' upon stop() or kill()
-	private boolean started = false; // set to 'true' upon first call to start()
+	private boolean isActive = false; // set to 'true' upon each call to startMe(), 'false' upon stop() or kill()
+	private boolean started = false; // set to 'true' upon first call to startMe()
 	private boolean killed = false; // set to 'true' upon call to kill()
 	
 	private final ExecutorService executor; // thread pool, for message handlers using supplied consumer
@@ -319,9 +319,9 @@ public class Connection<Message> {
 		this.receiver.setHandler(x -> { sendAck(x.address); handler.accept(x); } ); // set upon each start, unlike
 		
 		if (!this.started) {
-			this.receiver.start(); // start to take incoming messages from queue and handle them
+			this.receiver.startMe(); // start to take incoming messages from queue and handle them
 			this.sender.setHandler(x -> safeSend(x));
-			this.sender.start();   // start to take outgoing messages from queue and send them one-by-one
+			this.sender.startMe();   // start to take outgoing messages from queue and send them one-by-one
 		}
 		
 		startMessenger(myAddress); // will throw RuntimeException if a Messenger with same address is already active
@@ -360,7 +360,7 @@ public class Connection<Message> {
 		this.killed  = true;
 		this.executor.shutdown();
 		
-		killMessenger();
+		killMessenger(); // has to be the last call, because dispatechers deppend on it
 	}
 	
 	

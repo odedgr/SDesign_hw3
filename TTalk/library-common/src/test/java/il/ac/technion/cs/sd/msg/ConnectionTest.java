@@ -14,6 +14,8 @@ import org.junit.Test;
 
 public class ConnectionTest {
 
+	// TODO massive rewrite needed
+	
 	private Codec<Envelope<String>> defaultCodec = new XStreamCodec<>();
 	static final String DUMMY_CONN_ADDRESS = "dummy10";
 	
@@ -34,9 +36,9 @@ public class ConnectionTest {
 	}
 
 	public <T> Connection<T> buildConnection(String address, Consumer<Envelope<T>> consumer) {
-		Connection<T> conn = new Connection<T>(DUMMY_CONN_ADDRESS, new XStreamCodec<>(), consumer);
+		Connection<T> conn = new Connection<T>(DUMMY_CONN_ADDRESS, new XStreamCodec<>());
 		connections.add(conn);
-		conn.start();
+		conn.start(consumer);
 		return conn;
 	}
 	
@@ -51,19 +53,19 @@ public class ConnectionTest {
 	// can't create connection with null address
 	@Test (expected=IllegalArgumentException.class)
 	public void cantCreateConnectionWithNullAddress() {
-		new Connection<String>(null, defaultCodec, x -> stubHandle(x));
+		new Connection<String>(null, defaultCodec);
  	}
 	
 	// can't create connection with empty address
 	@Test (expected=IllegalArgumentException.class)
 	public void cantCreateConnectionWithEmptyAddress() {
-		new Connection<String>("", defaultCodec, x -> stubHandle(x));
+		new Connection<String>("", defaultCodec);
  	}
 	
 	// can't create connection with null codec
 	@Test (expected=IllegalArgumentException.class)
 	public void cantCreateConnectionWithNullCodec() {
-		new Connection<String>("", defaultCodec, x -> stubHandle(x));
+		new Connection<String>("", null);
  	}
 	
 	// can't send after killing connection
@@ -78,7 +80,7 @@ public class ConnectionTest {
 	// can't send before staring connection
 	@Test (expected=RuntimeException.class)
 	public void cantSendBeforeStartingConnection() throws InterruptedException {
-		Connection<String> conn = new Connection<String>(DUMMY_CONN_ADDRESS, new XStreamCodec<>(), x -> stubHandle(x)); 
+		Connection<String> conn = new Connection<String>(DUMMY_CONN_ADDRESS, new XStreamCodec<>()); 
 		Thread.sleep(10L);
 		conn.send("dummy2", "never sent");
  	}
