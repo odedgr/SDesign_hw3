@@ -5,7 +5,31 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
-
+/**
+ * A Connection manages receiving and sending custom messages, and allow user-defined handling of incoming messages.
+ * 
+ * <p>
+ * A connection object takes care of reliability issues of low-level communication, and allows for simultaneous handling
+ * of incoming and outgoing traffic. 
+ * </p> 
+ *
+ * A typical Connection creation and usage:<br><br>
+ * 
+ * <code> 
+ * Connection&lt;Message&gt; conn = new Connection("server", x -> handleMessage(x));
+ * <br>conn.start();
+ * <br>...
+ * <br>conn.kill();
+ * </code><br><br>
+ * 
+ * where handleMessage() has a signature of:<br>
+ * <code>
+ * void handleMessage({@link Envelope}&lt;Message&gt; m)
+ * </code><br><br>
+ * 
+ * @param <Message> User-defined type of message to be handled by this connection. Using application should send a prototype of all
+ * messages it uses (either incoming or outgoing) and handle internally each possible sub-type of Message.
+ */
 public class Connection<Message> {
 	
 	// CONSTANTS
@@ -75,7 +99,22 @@ public class Connection<Message> {
 	public Connection(String myAddress, Codec<Envelope<Message>> codec, Consumer<Envelope<Message>> handler) {
 		this(myAddress, codec, handler, null);
 	}
-
+	
+	
+	/**
+	 * Constructor. Creates a connection for accepting and handling incoming messages as well as sending back outgoing replies, 
+	 * using a default {@link Codec} to encode/decode messages into the set Message type of the connection, and the default MessengerFactory.<br>
+	 * <b>Notice:</b> created Connection is inactive until {@link #start} is invoked. 
+	 * 
+	 * @param myAddress - This connection's address.
+	 * @param handler - Application-defined function to handle raw incoming String messages. Will be applied for
+	 * each incoming message (that is not an ACK). Different "types" of messages should be classified and handled
+	 * accordingly on the application side.
+	 */
+	public Connection(String myAddress, Consumer<Envelope<Message>> handler) {
+		this(myAddress, new XStreamCodec<>(), handler, null);
+	}
+	
 	
 	/**
 	 * Create and start a new Messenger to be used by this Connection, with a given address. 
