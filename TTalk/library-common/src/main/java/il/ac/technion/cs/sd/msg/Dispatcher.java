@@ -16,10 +16,15 @@ import java.util.function.Consumer;
  */
 public class Dispatcher<Message> extends Thread {
 	
+	// CONSTANTS
+	private static final long TAKE_MSG_TIMEOUT = 50L; // how long to wait on queue to take a message to handle
+	
 	// INSTANCE VARIABLES
 	private final BlockingQueue<Envelope<Message>> queue;
 	private Consumer<Envelope<Message>> consumer; // not final - set using setHandler. must be set before start(), startMe()
 	private Object pauseFlag = new Object(); // used as a monitor lock for synching
+	private Object startFlag = new Object(); // used as a monitor lock for synching
+	private Object enqueueFlag = new Object(); // used as a monitor lock for synching
 	
 	// STATE FLAGS
 	private boolean started = false; 	// set to 'true' upon calling startMe()
@@ -70,60 +75,79 @@ public class Dispatcher<Message> extends Thread {
 		}
 		
 		if (this.started) return; // ignore repetitive calls
+
+		synchronized (this.startFlag) {
+			this.started = true;
+		}
 		
-		this.started = true;
 		this.start();
 	}
 	
 	
 	@Override
 	public void run() {
-		if (!this.started) {
-			throw new RuntimeException("started dispatcher thread wrong. did you call start() instead of startMe()?");
+		boolean badStart = false;
+		
+		synchronized (this.startFlag) {
+			if (!this.started) {
+				badStart = true;
+			}
 		}
 		
-		while (started) { // pausing is handled internally
+		if (badStart) {
+			throw new RuntimeException("started dispatcher thread wrong. did you call start() instead of startMe()?");
+		}
+
+		while (!this.killed) { // pausing is handled internally
 			try {
-				if (this.isPaused) { // when pause() is called, dispatcher will wait until unpause() is called, notifying
-					synchronized (this.pauseFlag) {
-						this.pauseFlag.wait();
-					}
-				}
-				
-				synchronized (this.queue) { // sync for completing handling when dispatcher is stopped
-					tryToHandleFromQueue();
-				}
+				pauseIfFlagged();
+				tryToHandleFromQueue();
 			} catch (InterruptedException e) {
-				if (this.started) { // interrupted NOT from kill()
+				if (!this.killed) { // interrupted NOT from kill()
 					System.out.println("dispatcher thread unintentionally interrupted.");
 				}
-				else { // interrupted from a call to kill()
-					this.killed = true;
-					flushQueue(); // no need to explicitly block enqueuing, done within enqueue when killed
-					this.ignoreIncoming = false; // set flag back, to invoke exceptions when trying to enqueue a killed dispatcher
-				}
+			}
+		}
+		
+		flushQueue(); // no need to explicitly block enqueuing, done within enqueue when killed
+		this.ignoreIncoming = false; // set flag back, to invoke exceptions when trying to enqueue a killed dispatcher
+	}
+
+	
+	/**
+	 * Check if {@link #pause()} was called, and if so, waits until {@link #unpause()} is called.
+	 * 
+	 * @throws InterruptedException
+	 */
+	private void pauseIfFlagged() throws InterruptedException {
+		if (this.isPaused) { // when pause() is called, dispatcher will wait until unpause() is called, notifying
+			synchronized (this.pauseFlag) {
+				this.pauseFlag.wait();
 			}
 		}
 	}
 
 
+	/**
+	 * Try to take the next message from the queue and handle it. Wait for {@link TAKE_MSG_TIMEOUT} milliseconds for there
+	 * to be a message to take from queue, if non was found - returns without doing anything, allowing to check for 
+	 * state changes such as pause and kill.
+	 * 
+	 * @throws InterruptedException
+	 */
 	private void tryToHandleFromQueue() throws InterruptedException {
-		Envelope<Message> env = this.queue.poll(50L, TimeUnit.MILLISECONDS); // don't use take(), to allow for killing
+		Envelope<Message> env = this.queue.poll(TAKE_MSG_TIMEOUT, TimeUnit.MILLISECONDS); // don't use take(), to allow for killing
 		if (null != env) {
 			this.consumer.accept(env);
 		}
 	}
 
+	
 	/**
 	 * Cleanly stops the dispatcher, allowing for a single Message to complete its handling.
 	 */
 	public void kill() {
-		this.started = false;
-		
-		synchronized (this.queue) { // allow for in-handling message to complete
-			this.interrupt(); 
-		}
-		
+		this.killed = true;
 		this.ignoreIncoming = true;
 	}
 	
@@ -135,6 +159,10 @@ public class Dispatcher<Message> extends Thread {
 	 * Also, new messages <i>can</i> be enqueued while dispatcher is paused.
 	 */
 	public void pause() {
+		if (this.killed) {
+			throw new RuntimeException("cannot pause a dispatcher that was already killed");
+		}
+		
 		if (!this.started) {
 			throw new RuntimeException("can only pause a started dispatcher");
 		}
@@ -170,9 +198,12 @@ public class Dispatcher<Message> extends Thread {
 			throw new IllegalArgumentException("cannot add null envelope to dispatcher's queue");
 		}
 		
-		if (this.ignoreIncoming) {
-			return;
+		synchronized (this.enqueueFlag) {
+			if (this.ignoreIncoming) {
+				return;
+			}	
 		}
+		
 		
 		if (this.killed) {
 			throw new RuntimeException("cannot enqueue after dispatcher was killed");
@@ -254,6 +285,34 @@ public class Dispatcher<Message> extends Thread {
 		}
 		
 		this.consumer = handler;
+	}
+
+
+	/**
+	 * Wait until this dispatcher's queue of messages to handle is emptied, or a given timeout is reached.
+	 * BLOCKS the calling thread until the first of the two conditions is met.
+	 * 
+	 * @param timeout
+	 * @return
+	 */
+	public boolean waitUntilEmptyOrTimeout(long timeout) {
+		final long WAIT_RESOLUTION_IN_MILLISECONDS = 5L;
+		
+		if (timeout < 1L) {
+			throw new IllegalArgumentException("timeout must be a positive value");
+		}
+		
+		while (!this.queue.isEmpty() && timeout > 0) {
+			try {
+				Thread.sleep(WAIT_RESOLUTION_IN_MILLISECONDS);
+				timeout -= WAIT_RESOLUTION_IN_MILLISECONDS;
+			} catch (InterruptedException e) {
+				System.out.println("Interrupted while waiting for queue to empty");
+				return false;
+			}
+		}
+		
+		return this.queue.isEmpty();
 	}
 	
 }
