@@ -7,7 +7,6 @@ import java.util.function.Consumer;
 
 
 public class Connection<Message> {
-
 	
 	// CONSTANTS
 	private static final String ACK = "";
@@ -32,7 +31,18 @@ public class Connection<Message> {
 	private final ExecutorService executor; // thread pool, for message handlers using supplied consumer
 	
 	
-	// TODO document
+	/**
+	 * Constructor. Creates a connection for accepting and handling incoming messages as well as sending back outgoing replies, 
+	 * using a custom {@link Codec} to encode/decode messages into the set Message type of the connection, and a custom MessengerFactory.<br>
+	 * <b>Notice:</b> created Connection is inactive until {@link #start} is invoked. 
+	 * 
+	 * @param myAddress - This connection's address.
+	 * @param handler - Application-defined function to handle raw incoming String messages. Will be applied for
+	 * each incoming message (that is not an ACK). Different "types" of messages should be classified and handled
+	 * accordingly on the application side.
+	 * @param codec - Custom {@link Codec} for encoding/decoding messages.
+	 * @param factory - {@link MessengerFactory}, used for creating {@link Messenger messengers} to handle low-level communication.
+	 */
 	public Connection(String myAddress, Codec<Envelope<Message>> codec, Consumer<Envelope<Message>> handler, MessengerFactory factory) {
 		if (null == myAddress || "".equals(myAddress)) {
 			throw new IllegalArgumentException("invalid server address - empty or null");
@@ -51,35 +61,59 @@ public class Connection<Message> {
 	}
 	
 	
-	// TODO document
+	/**
+	 * Constructor. Creates a connection for accepting and handling incoming messages as well as sending back outgoing replies, 
+	 * using a custom {@link Codec} to encode/decode messages into the set Message type of the connection, and the default MessengerFactory.<br>
+	 * <b>Notice:</b> created Connection is inactive until {@link #start} is invoked. 
+	 * 
+	 * @param myAddress - This connection's address.
+	 * @param handler - Application-defined function to handle raw incoming String messages. Will be applied for
+	 * each incoming message (that is not an ACK). Different "types" of messages should be classified and handled
+	 * accordingly on the application side.
+	 * @param codec - Custom {@link Codec} for encoding/decoding messages.
+	 */
 	public Connection(String myAddress, Codec<Envelope<Message>> codec, Consumer<Envelope<Message>> handler) {
 		this(myAddress, codec, handler, null);
 	}
 
 	
-	// TODO document
-	private Messenger startMessenger(String myAddress) {
+	/**
+	 * Create and start a new Messenger to be used by this Connection, with a given address. 
+	 * <br>(*) If a Messenger was already active, this does nothing. 
+	 * <br>(*) If messenger creation failed, connection's state would be like after killing its Messenger.
+	 * 
+	 * @param myAddress - Address to be bound to (used by) the newly created messenger.
+	 */
+	private void startMessenger(String myAddress) { // TODO handle failure in calling method ?
+		if (null != this.messenger) return; // messenger already running for this connection
+		
+		Messenger newMessenger = null;
 		try {
-			return this.factory.start(myAddress, x -> receiveIncomingMessage(x));
+			newMessenger = this.factory.start(myAddress, x -> receiveIncomingMessage(x));
 		} catch (MessengerException e) {
 			System.out.println(e.getMessage());
 			throw new RuntimeException(e);
+		} finally {
+			this.messenger = newMessenger; // might be null if messenger creation failed
 		}
 	}
 	
 	
-	// TODO document
-		private void killMessenger() { // TODO document
-			if (null != this.messenger) {
-				try {
-					this.messenger.kill();
-				} catch (MessengerException e) {
-					System.out.println("MessengerException when trying to kill messenger in Connection");
-					throw new RuntimeException(e);
-				}
-				this.messenger = null;
-			}
+	/**
+	 * Kill this connection's Messenger. If no Messenger was active - this does nothing.
+	 */
+	private void killMessenger() {
+		if (null == this.messenger) return; // connection doesn't have an active messenger
+		
+		try {
+			this.messenger.kill();
+		} catch (MessengerException e) {
+			System.out.println("MessengerException when trying to kill messenger in Connection");
+			throw new RuntimeException(e);
+		} finally {
+			this.messenger = null;
 		}
+	}
 	
 	/**
 	 * Add an outgoing message to a client (either with or without content) to the outgoing message queue. 
@@ -128,7 +162,6 @@ public class Connection<Message> {
 		synchronized (this.ackNotifier) {
 			do {
 				try {
-//					System.out.println("sending...");
 					this.messenger.send(env.address, this.codec.encode(env));
 					this.ackNotifier.wait(ACK_TIMEOUT_IN_MILLISECONDS);
 				} catch (MessengerException e) {
@@ -139,6 +172,7 @@ public class Connection<Message> {
 			} while (!this.gotAck);
 		}
 	}
+	
 	
 	/**
 	 * Sends an ACK (empty string) to a given address, guaranteed to be received by the recipient.
@@ -243,7 +277,7 @@ public class Connection<Message> {
 			this.sender.start();   // start to take outgoing messages from queue and send them one-by-one
 		}
 		
-		this.messenger = startMessenger(myAddress);
+		startMessenger(myAddress); // will throw RuntimeException if a Messenger with same address is already active
 		this.started = true;
 		this.isActive = true;
 		this.receiver.unpause();
@@ -251,7 +285,11 @@ public class Connection<Message> {
 	}
 	
 	
-	// TODO document
+	/**
+	 * Stop (Pause) this Connection. <br>When stopped, this connection does not receive, handle or send anything, but can be re-started
+	 * using the {@link Start} method.
+	 * <br>If the Connection was already stopped upon invocation, this does nothing.
+	 */
 	synchronized public void stop() {
 		if (!this.isActive) { // already stopped - ignoring call
 			return;
@@ -289,13 +327,26 @@ public class Connection<Message> {
 	}
 	
 	
-	// TODO document
+	/**
+	 * Get the amount of time (in milliseconds) this connection waits to receive an ACK, before trying to re-send a message.
+	 *  
+	 * @return timeout in milliseconds for an ACK before trying to re-send a message.
+	 */
 	public long getAckTimeout() {
 		return ACK_TIMEOUT_IN_MILLISECONDS;
 	}
 
 
-	// TODO document
+	/**
+	 * Check if this Connection is active. i.e receiving and handling requests as well as sending out messages.
+	 * <br><br>
+	 * This will return 'false' if any of the following apply:
+	 * <br>(1) The connection has not been started yet.
+	 * <br>(2) The connection has been killed
+	 * <br>(3) The connection has been started, but stopped. 
+	 * 
+	 * @return 'true' when this connection is receiving, handling and sending messages, 'false' otherwise.
+	 */
 	public boolean isAlive() {
 		return this.isActive;
 	}
