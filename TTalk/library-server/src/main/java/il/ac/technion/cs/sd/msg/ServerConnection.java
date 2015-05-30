@@ -36,40 +36,29 @@ public class ServerConnection<Message> {
 	private final Connection<Message> conn;
 	private BiConsumer<String, Message> consumer;
 	
-	
+	// TODO update documentation
 	/**
 	 * Constructor. Creates a connection for accepting and handling incoming messages as well as sending back outgoing replies, 
 	 * using a custom {@link Codec} to encode/decode messages into the set Message type of the connection.<br>
 	 * <b>Notice:</b> created Connection is inactive until {@link #start} is invoked. 
 	 * 
 	 * @param address - This server's address.
-	 * @param consumer - Application-defined function to handle incoming messages (encoded as String). Will be applied for
-	 * each incoming message (that is not an ACK). Different "types" of messages should be classified and handled
-	 * accordingly on the application side.
 	 * @param codec - Custom codec for encoding/decoding messages.
 	 */
-	public ServerConnection(String address, BiConsumer<String, Message> consumer, Codec<Envelope<Message>> codec) {
-		if (null == consumer) {
-			throw new IllegalArgumentException("got null consumer");
-		}
-		
+	public ServerConnection(String address, Codec<Envelope<Message>> codec) {
 		this.conn = new Connection<Message>(address, codec);
-		this.consumer = consumer;
 	}
 
-	
+	// TODO update documentation
 	/**
 	 * Constructor. Creates a server connection, accepting and handling incoming messages as well as sending back outgoing replies, 
 	 * using the default {@link Codec}. <br>
 	 * <b>Notice:</b> created Connection is inactive until {@link #start} is invoked. 
 	 * 
 	 * @param address - This server's address.
-	 * @param consumer - Application-defined function to handle incoming messages (encoded as String). Will be applied for
-	 * each incoming message (that is not an ACK). Different "types" of messages should be classified and handled
-	 * accordingly on the application side.
 	 */
-	public ServerConnection(String address, BiConsumer<String, Message> consumer) {
-		this(address, consumer, new XStreamCodec<Envelope<Message>>());
+	public ServerConnection(String address) {
+		this(address, new XStreamCodec<Envelope<Message>>());
 	}
 
 	// TODO update documentation
@@ -96,7 +85,7 @@ public class ServerConnection<Message> {
 		this.conn.stop();
 	}
 		
-	
+	// TODO update documentation
 	/**
 	 * Handle an incoming message, that is NOT an ACK (e.g: has actual contents).
 	 * An ACK is implicitly sent back immediately to the sender of the message, and the message is handled using
@@ -104,7 +93,11 @@ public class ServerConnection<Message> {
 	 * 	
 	 * @param env - Envelope containing the incoming message to be handled.
 	 */
-	private void handleIncomingMessage(Envelope<Message> env) { 
+	private void handleIncomingMessage(Envelope<Message> env) {
+		if (null == this.consumer) {
+			throw new RuntimeException("WTF?! somehow started running before setting the consumer");
+		}
+		
 		// dispatch handling to a separate thread, which might add an outgoing message later, using the send() method
 		this.consumer.accept(env.address, env.content);
 	}
