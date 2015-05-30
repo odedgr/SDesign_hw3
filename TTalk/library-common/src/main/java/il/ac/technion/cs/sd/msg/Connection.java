@@ -316,16 +316,16 @@ public class Connection<Message> {
 			throw new IllegalArgumentException("handler cannot be null");
 		}
 		
-		this.receiver.setHandler(x -> { sendAck(x.address); handler.accept(x); } ); // set upon each start, unlike
+		this.receiver.setHandler(x -> { sendAck(x.address); handler.accept(x); } ); // set upon each start, unlike sender
 		
 		if (!this.started) {
 			this.receiver.startMe(); // start to take incoming messages from queue and handle them
-			this.sender.setHandler(x -> safeSend(x));
+			this.sender.setHandler(x -> safeSend(x)); // only set once, upon initial start
 			this.sender.startMe();   // start to take outgoing messages from queue and send them one-by-one
+			this.started = true;
 		}
 		
 		startMessenger(myAddress); // will throw RuntimeException if a Messenger with same address is already active
-		this.started = true;
 		this.isActive = true;
 		this.receiver.unpause();
 		this.sender.unpause();
