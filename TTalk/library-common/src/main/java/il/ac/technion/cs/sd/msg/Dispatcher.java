@@ -9,25 +9,25 @@ import java.util.function.Consumer;
 
 public class Dispatcher<Message> extends Thread {
 	private final BlockingQueue<Envelope<Message>> queue;
-	private final Consumer<Envelope<Message>> consumer;
+	private Consumer<Envelope<Message>> consumer; // not final - is set upon each call to unpause()
 	private boolean isAlive = false;
 	private boolean isPaused = false;
-	private boolean stopped = false; // only set to 'true' after started and was killed
+	private boolean killed = false; // only set to 'true' after started and was killed
 	private Object pauseFlag = new Object();
 	
+	// TODO update documentation
 	/**
 	 * Create a Dispatcher, for handling each message in the supplied queue, by order of insertion.
 	 * 
 	 * @param q - Queue that holds incoming messages for handling.
 	 * @param c - Consumer representing callback for handling massages.
 	 */
-	public Dispatcher(BlockingQueue<Envelope<Message>> q, Consumer<Envelope<Message>> c) {
-		if (null == c || null == q) {
-			throw new IllegalArgumentException("niether consumer nor queue can be null");
+	public Dispatcher(BlockingQueue<Envelope<Message>> q) {
+		if (null == q) {
+			throw new IllegalArgumentException("queue cannot be null");
 		}
 		
 		this.queue = q;
-		this.consumer = c;
 	}
 
 	/**
@@ -35,15 +35,22 @@ public class Dispatcher<Message> extends Thread {
 	 * 
 	 * @param c - Consumer representing callback for handling massages.
 	 */
-	public Dispatcher(Consumer<Envelope<Message>> c) {
-		this(new LinkedBlockingQueue<Envelope<Message>>(), c);
+	public Dispatcher() {
+		this(new LinkedBlockingQueue<Envelope<Message>>());
 	}
 	
+	// TODO document
+	public synchronized void startMe() {
+		if (null == this.consumer) {
+			throw new RuntimeException("cannot start dispatcher before setting its handler");
+		}
+		
+		this.isAlive = true;
+		this.start();
+	}
 	
 	@Override
 	public void run() {
-		this.isAlive = true;
-		
 		while (isAlive) {
 			
 			try {
@@ -78,7 +85,7 @@ public class Dispatcher<Message> extends Thread {
 			this.interrupt(); 
 		}
 		
-		this.stopped = true;
+		this.killed = true;
 	}
 	
 	// TODO document
@@ -96,11 +103,12 @@ public class Dispatcher<Message> extends Thread {
 			throw new RuntimeException("can only unpause a live (already started, not yet killed) dispatcher");
 		}
 		
+		this.isPaused = false;
+		
 		synchronized (this.pauseFlag) {
 			this.pauseFlag.notify();
 		}
 		
-		this.isPaused = false;
 	}
 
 	/**
@@ -114,7 +122,7 @@ public class Dispatcher<Message> extends Thread {
 			throw new IllegalArgumentException("cannot add null envelope to dispatcher's queue");
 		}
 		
-		if (this.stopped) {
+		if (this.killed) {
 			throw new RuntimeException("cannot enqueue after dispatcher was killed");
 		}
 
@@ -145,6 +153,18 @@ public class Dispatcher<Message> extends Thread {
 				System.out.println("interrupted while waiting for dispatcher queue to empty");
 			}
 		}
+	}
+
+	public void setHandler(Consumer<Envelope<Message>> handler) {
+		if (this.killed) {
+			throw new RuntimeException("cannot set a handler for a killed dispatcher");
+		}
+		
+		if (this.isAlive && !this.isPaused) {
+			throw new RuntimeException("cannot change handler 'on the fly'. must pause it first");
+		}
+		// TODO Auto-generated method stub
+		
 	}
 	
 }

@@ -54,6 +54,7 @@ public class Connection<Message> {
 	
 	private final ExecutorService executor; // thread pool, for message handlers using supplied consumer
 	
+	// TODO update all constructors and javadoc with consumer change
 	
 	/**
 	 * Constructor. Creates a connection for accepting and handling incoming messages as well as sending back outgoing replies, 
@@ -67,7 +68,7 @@ public class Connection<Message> {
 	 * @param codec - Custom {@link Codec} for encoding/decoding messages.
 	 * @param factory - {@link MessengerFactory}, used for creating {@link Messenger messengers} to handle low-level communication.
 	 */
-	public Connection(String myAddress, Codec<Envelope<Message>> codec, Consumer<Envelope<Message>> handler, MessengerFactory factory) {
+	public Connection(String myAddress, Codec<Envelope<Message>> codec, MessengerFactory factory) {
 		if (null == myAddress || "".equals(myAddress)) {
 			throw new IllegalArgumentException("invalid server address - empty or null");
 		}
@@ -79,8 +80,8 @@ public class Connection<Message> {
 		this.factory   = (null != factory) ? factory : new MessengerFactory();
 		this.myAddress = myAddress;
 		this.executor  = Executors.newCachedThreadPool(); // TODO maybe get rid of this
-		this.receiver  = new Dispatcher<Message>(x -> { sendAck(x.address); handler.accept(x);; } );
-		this.sender    = new Dispatcher<Message>(x -> safeSend(x));
+		this.receiver  = new Dispatcher<Message>();
+		this.sender    = new Dispatcher<Message>();
 		this.codec     = codec;
 	}
 	
@@ -96,8 +97,8 @@ public class Connection<Message> {
 	 * accordingly on the application side.
 	 * @param codec - Custom {@link Codec} for encoding/decoding messages.
 	 */
-	public Connection(String myAddress, Codec<Envelope<Message>> codec, Consumer<Envelope<Message>> handler) {
-		this(myAddress, codec, handler, null);
+	public Connection(String myAddress, Codec<Envelope<Message>> codec) {
+		this(myAddress, codec, null);
 	}
 	
 	
@@ -111,8 +112,8 @@ public class Connection<Message> {
 	 * each incoming message (that is not an ACK). Different "types" of messages should be classified and handled
 	 * accordingly on the application side.
 	 */
-	public Connection(String myAddress, Consumer<Envelope<Message>> handler) {
-		this(myAddress, new XStreamCodec<>(), handler, null);
+	public Connection(String myAddress) {
+		this(myAddress, new XStreamCodec<>(), null);
 	}
 	
 	
@@ -275,7 +276,7 @@ public class Connection<Message> {
 	 * 
 	 * @return
 	 */
-	public Collection<Envelope<Message>> getUnhandeled() {
+	public Collection<Envelope<Message>> getUnhandled() {
 		if (this.isActive) {
 			throw new RuntimeException("can only be called when connection is inactive.");
 		}
@@ -302,17 +303,24 @@ public class Connection<Message> {
 	/**
 	 * Starts this Connection, enabling it to send and receive messages.
 	 */
-	synchronized public void start() {
+	synchronized public void start(Consumer<Envelope<Message>> handler) {
 		if (this.isActive) { // already started - ignoring call
 			return;
 		}
 		
 		if (this.killed) {
-			throw new RuntimeException("can only start a connection that was has never started before, or was stopped, but not if it was killed");
+			throw new RuntimeException("can only start a connection that has never started before, or was stopped, but not if it was killed");
 		}
+		
+		if (null == handler) {
+			throw new IllegalArgumentException("handler cannot be null");
+		}
+		
+		this.receiver.setHandler(x -> { sendAck(x.address); handler.accept(x); } ); // set upon each start, unlike
 		
 		if (!this.started) {
 			this.receiver.start(); // start to take incoming messages from queue and handle them
+			this.sender.setHandler(x -> safeSend(x));
 			this.sender.start();   // start to take outgoing messages from queue and send them one-by-one
 		}
 		

@@ -6,55 +6,52 @@ public class ClientConnection<Message> {
 	
 	// INSTANCE VARIABLES
 	private final Connection<Message> conn;
-	private final Consumer<Message> consumer;
 	private final String myServer;
 	
-	
+//	TODO update documentation
 	/**
 	 * Constructor. Creates a client connection, accepting and handling incoming messages as well as sending outgoing messages, 
 	 * using a custom {@link Codec} to encode/decode messages into the set Message type of the connection.<br>
 	 * <b>Notice:</b> created Connection is inactive until {@link #start} is invoked. 
 	 * 
+	 * @param serverAddress
 	 * @param myAddress - This client's address.
-	 * @param consumer - Application-defined function to handle incoming messages (encoded as String). Will be applied for
-	 * each incoming message (that is not an ACK). Different "types" of messages should be classified and handled
-	 * accordingly on the application side.
 	 * @param codec - Custom codec for encoding/decoding messages.
 	 */
-	public ClientConnection(String serverAddress, String myAddress, Consumer<Message> consumer, Codec<Envelope<Message>> codec) {
+	public ClientConnection(String serverAddress, String myAddress, Codec<Envelope<Message>> codec) {
 		if (null == serverAddress || "".equals(serverAddress)) {
 			throw new IllegalArgumentException("invalid server address - empty or null");
 		}
 		
-		if (null == consumer) {
-			throw new IllegalArgumentException("got null consumer");
-		}
-		
-		this.conn = new Connection<Message>(myAddress, codec, x -> handleIncomingMessage(x));
+		this.conn = new Connection<Message>(myAddress, codec);
 		this.myServer = serverAddress;
-		this.consumer = consumer;
 	}
 
 	
+	// TODO update documentation
 	/**
 	 * Constructor. Creates a client connection, accepting and handling incoming messages as well as sending back outgoing replies, 
 	 * using the default {@link Codec}. <br>
 	 * <b>Notice:</b> created Connection is inactive until {@link #start} is invoked. 
 	 * 
 	 * @param myAddress - This client address.
-	 * @param consumer - Application-defined function to handle incoming messages (encoded as String). Will be applied for
-	 * each incoming message (that is not an ACK). Different "types" of messages should be classified and handled
-	 * accordingly on the application side.
+	 * @param serverAddress
 	 */
-	public ClientConnection(String serverAddress, String myAddress, Consumer<Message> consumer) {
-		this(serverAddress, myAddress, consumer, new XStreamCodec<Envelope<Message>>());
+	public ClientConnection(String serverAddress, String myAddress) {
+		this(serverAddress, myAddress, new XStreamCodec<Envelope<Message>>());
 	}
 	
-	 /**
+	
+	// TODO update documentation
+	/**
 	 * Starts this ClientConnection, enabling it to send and receive messages.
 	 */
-	public void start() {
-		this.conn.start();
+	public void start(Consumer<Message> handler) {
+		if (null == handler) {
+			throw new IllegalArgumentException("handler cannot be null");
+		}
+		
+		this.conn.start(env -> handler.accept(env.content));
 	}
 	
 	
@@ -68,19 +65,6 @@ public class ClientConnection<Message> {
 		this.conn.stop();
 	}
 
-	
-	/**
-	 * Handle an incoming message, that is NOT an ACK (e.g: has actual contents).
-	 * An ACK is implicitly sent back immediately to the sender of the message, and the message is handled using
-	 * the consumer given to this ServerConnection upon initialization.
-	 * 	
-	 * @param env - Envelope containing the incoming message to be handled.
-	 */
-	private void handleIncomingMessage(Envelope<Message> env) { 
-		// dispatch handling to a separate thread, which might add an outgoing message later, using the send() method
-		this.consumer.accept(env.content);
-	}
-	
 	
 	/**
 	 * Send out a message. <b>Non-blocking</b> call.

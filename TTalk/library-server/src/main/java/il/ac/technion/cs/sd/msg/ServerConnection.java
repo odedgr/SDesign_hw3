@@ -34,7 +34,7 @@ public class ServerConnection<Message> {
 
 	// INSTANCE VARIABLES
 	private final Connection<Message> conn;
-	private final BiConsumer<String, Message> consumer;
+	private BiConsumer<String, Message> consumer;
 	
 	
 	/**
@@ -53,7 +53,7 @@ public class ServerConnection<Message> {
 			throw new IllegalArgumentException("got null consumer");
 		}
 		
-		this.conn = new Connection<Message>(address, codec, x->handleIncomingMessage(x));
+		this.conn = new Connection<Message>(address, codec);
 		this.consumer = consumer;
 	}
 
@@ -72,12 +72,17 @@ public class ServerConnection<Message> {
 		this(address, consumer, new XStreamCodec<Envelope<Message>>());
 	}
 
-	
+	// TODO update documentation
 	/**
 	 * Starts this ServerConnection, enabling it to send and receive messages.
 	 */
-	public void start() {
-		this.conn.start();
+	public void start(BiConsumer<String, Message> handler) {
+		if (null == handler) {
+			throw new IllegalArgumentException("handler cannot be null");
+		}
+		
+		this.consumer = handler;
+		this.conn.start(x -> handleIncomingMessage(x));
 	}
 	
 	
