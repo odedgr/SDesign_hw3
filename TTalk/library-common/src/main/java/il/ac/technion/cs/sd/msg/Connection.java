@@ -16,7 +16,7 @@ import java.util.function.Consumer;
  * A typical Connection creation and usage:<br><br>
  * 
  * <code> 
- * Connection&lt;Message&gt; conn = new Connection("server", x -> handleMessage(x));
+ * Connection&lt;Message&gt; conn = new Connection("myAddress", x -> handleMessage(x));
  * <br>conn.start();
  * <br>...
  * <br>conn.kill();

@@ -98,7 +98,7 @@ public class DispatcherTest {
 		List<Envelope<Object>> jobsInEnvelopes = new ArrayList<>();
 		List<Integer> handledJobs = new ArrayList<Integer>();
 		
-		Dispatcher<Object> disp = buildDispatcher(x -> handledJobs.add((Integer)x.payload));
+		Dispatcher<Object> disp = buildDispatcher(x -> handledJobs.add((Integer)x.content));
 		disp.start();
 
 		for (Integer i : jobs) {
@@ -121,7 +121,7 @@ public class DispatcherTest {
 		List<Envelope<Object>> jobsInEnvelopes = new ArrayList<>();
 		List<Integer> unhandledJobs = new ArrayList<Integer>(jobs);
 		
-		Dispatcher<Object> disp = buildDispatcher(x -> { unhandledJobs.remove(x.payload); blockHandler(x, BLOCK_TIME); });
+		Dispatcher<Object> disp = buildDispatcher(x -> { unhandledJobs.remove(x.content); blockHandler(x, BLOCK_TIME); });
 		disp.start();
 
 		for (Integer i : jobs) {
@@ -132,7 +132,7 @@ public class DispatcherTest {
 		
 		Thread.sleep((long)(BLOCK_TIME * 1.2)); // allow for a single job to be handled
 		
-		assertEquals(unhandledJobs, disp.getUnhandled().stream().map(x -> x.payload).collect(Collectors.toList()));
+		assertEquals(unhandledJobs, disp.getUnhandled().stream().map(x -> x.content).collect(Collectors.toList()));
 	}
 	
 
@@ -166,7 +166,7 @@ public class DispatcherTest {
 	@Test
 	public void jobHandledInOrderMultithreadedOffline() throws InterruptedException {
 		List<Integer> handledJobs = new ArrayList<Integer>();
-		Dispatcher<Object> disp = buildDispatcher(x -> handledJobs.add((Integer) x.payload));
+		Dispatcher<Object> disp = buildDispatcher(x -> handledJobs.add((Integer) x.content));
 		List<Thread> producers = new ArrayList<Thread>();
 
 		for (int i = 0; i < 5; ++i) {
@@ -179,7 +179,7 @@ public class DispatcherTest {
 		disp.start();
 		List<Integer> dispInitJobs = disp.getUnhandled()
 				.stream()
-				.map(x -> (Integer)x.payload)
+				.map(x -> (Integer)x.content)
 				.collect(Collectors.toList());
 		
 		disp.waitUntilEmpty();
