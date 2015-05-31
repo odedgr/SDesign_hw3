@@ -2,6 +2,7 @@ package il.ac.technion.cs.sd.app.msg;
 
 import static org.junit.Assert.*;
 import il.ac.technion.cs.sd.app.msg.exchange.ConnectRequest;
+import il.ac.technion.cs.sd.app.msg.exchange.DisconnectRequest;
 import il.ac.technion.cs.sd.app.msg.exchange.Exchange;
 import il.ac.technion.cs.sd.app.msg.exchange.FriendRequest;
 import il.ac.technion.cs.sd.app.msg.exchange.FriendResponse;
@@ -17,11 +18,15 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import org.aopalliance.intercept.Invocation;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.mockito.internal.matchers.Any;
+
+import com.google.inject.matcher.Matchers;
 
 public class ClientMsgApplicationTest {
 	
@@ -68,15 +73,45 @@ public class ClientMsgApplicationTest {
 	private void loginClient(Consumer<InstantMessage> messageConsumer,
 			Function<String, Boolean> friendshipRequestHandler,
 			BiConsumer<String, Boolean> friendshipReplyConsumer) {
+		
+		// Get the client's consumer sent to connection's start method.
+		Mockito.doAnswer(invocation -> {
+			clientConsumer = (Consumer<Exchange>) invocation.getArguments()[0];
+			return null;
+		}).when(connection).start(Mockito.any());
+		
 		client.login(messageConsumer, friendshipRequestHandler, friendshipReplyConsumer);
-		ArgumentCaptor<Consumer> consumerCaptor = ArgumentCaptor.forClass(Consumer.class);
-		Mockito.verify(connection).start(consumerCaptor.capture());
-		clientConsumer = consumerCaptor.getValue();
+		
+		Mockito.verify(connection).start(Mockito.any());
 		Mockito.verify(connection).send(new ConnectRequest());
 	}
 	
 	private void sendToClient(Exchange exchange) {
 		clientConsumer.accept(exchange);
+	}
+	
+	@Test
+	public void connectRequestSent() throws InterruptedException {
+		client.login(im -> {}, s -> true, (x, y) -> {});
+		Mockito.verify(connection).start(Mockito.any());
+		Mockito.verify(connection).send(new ConnectRequest());
+		
+		client.logout();
+		Mockito.verify(connection).send(new DisconnectRequest());
+		Mockito.verify(connection).stop();
+	}
+	
+	@Test
+	public void severalConnectAndDisconnects() throws InterruptedException {
+		client.login(im -> {
+		}, s -> true, (x, y) -> {
+		});
+		Mockito.verify(connection, Mockito.atLeastOnce()).start(Mockito.any());
+		Mockito.verify(connection, Mockito.atLeastOnce()).send(new ConnectRequest());
+
+		client.logout();
+		Mockito.verify(connection, Mockito.atLeastOnce()).send(new DisconnectRequest());
+		Mockito.verify(connection, Mockito.atLeastOnce()).stop();
 	}
 
 	@Test
@@ -120,16 +155,16 @@ public class ClientMsgApplicationTest {
 	@Test
 	public void isOnlineReturned() throws InterruptedException {
 		loginClient(im -> {}, s -> true, (x, y) -> {});
-
-		Thread t = new Thread(() -> {
-			assertEquals(Optional.of(true), client.isOnline("Someone"));
-		});
-		t.start();
-		Thread.sleep(100);
 		
+		// When a request is sent, return a response.
+		Mockito.doAnswer(invocation -> { 
+			sendToClient(new IsOnlineResponse("Someone", Optional.of(true)));
+			return null;
+		}).when(connection).send(new IsOnlineRequest("Someone"));
+		
+		
+		assertEquals(Optional.of(true), client.isOnline("Someone"));
 		// Verify that a request was sent.
 		Mockito.verify(connection).send(new IsOnlineRequest("Someone"));
-		// Send response to client.
-		sendToClient(new IsOnlineResponse("Someone", Optional.of(false)));
 	}
 }
