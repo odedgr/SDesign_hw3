@@ -13,6 +13,8 @@ import il.ac.technion.cs.sd.msg.ClientConnection;
 
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -46,6 +48,7 @@ public class ClientMsgApplication {
 		
 		this.username = username;
 		this.connection = new ClientConnection<Exchange>(serverAddress, username);
+		this.isOnlineResponseQueue = new LinkedBlockingQueue<Optional<Boolean>>();
 	}
 	
 	/**
@@ -73,6 +76,7 @@ public class ClientMsgApplication {
 		}
 		this.username = username;
 		this.connection = connection;
+		this.isOnlineResponseQueue = new LinkedBlockingQueue<Optional<Boolean>>();
 	}
 	
 	/**
