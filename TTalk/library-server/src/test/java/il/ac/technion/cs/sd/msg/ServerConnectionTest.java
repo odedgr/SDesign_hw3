@@ -210,7 +210,7 @@ public class ServerConnectionTest {
 	
 	@Test (timeout=10000L)
 	public void restartChangesHandler() throws Exception { // TODO debug
-		int iterations = 50;
+		int iterations = 20;
 		long sleeptime = 5L;
 		
 		List<String> first = new ArrayList<String>();
@@ -263,7 +263,9 @@ public class ServerConnectionTest {
 	
 	@Test (timeout=10000L)
 	public void handlerIsExecuted() throws Exception {
-		int iterations = 100;
+		int iterations = 20;
+		long sleeptime = 5L;
+		
 		Queue<String> list = new LinkedBlockingQueue<String>();
 		Messenger m = startAndAddToList();
 		String xml = getXmlEnvelope(m.getAddress(), "hi");
@@ -271,8 +273,7 @@ public class ServerConnectionTest {
 		
 		sc.start((addr, x) -> list.add(x));
 		for (int i = 0; i < iterations; ++i) { // send a lot to make sure something was received
-			Thread.sleep(10L);
-//			System.out.println("[tester] sending " + i);
+			Thread.sleep(sleeptime);
 			m.send(sc.myAddress(), xml);
 		}
 		
