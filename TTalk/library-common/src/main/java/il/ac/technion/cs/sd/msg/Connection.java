@@ -160,30 +160,30 @@ public class Connection<Message> {
 	 * For convenience, you might consider using the {@link #sendAck(String to) sendAck} instead. 
 	 * 
 	 * @param to - Address of destination to whom the message will be sent.
-	 * @param payload - Contents of message to be sent..
+	 * @param message - Contents of message to be sent..
 	 * @see {@link #sendAck(String to)}
 	 */
-	protected void send(String to, Message payload) {
+	protected void send(String to, Message message) {
 		if (null == to || "".equals(to)) {
-			throw new IllegalArgumentException("recepient address was null or empty");
+			throw new IllegalArgumentException("recepient address cannot be null nor enpty");
 		}
 		
-		if (null == payload) {
-			throw new IllegalArgumentException("payload to send was null");
+		if (null == message) {
+			throw new IllegalArgumentException("contents to send cannot be null");
 		}
 		
 		if (!this.isActive) {
 			throw new RuntimeException("cannot send when connection is inactive");
 		}
 		
-		if (ACK.equals(payload)) { // send an ACK - no need to wait for incoming ACK in return
+		if (ACK.equals(message)) { // send an ACK - no need to wait for incoming ACK in return
 			sendAck(to);
 			return;
 		}
 		
 		// by here we know we are trying to send a message with contents - need to make sure it was received
 		try {
-			this.sender.enqueue(Envelope.wrap(to, payload));
+			this.sender.enqueue(Envelope.wrap(to, message));
 		} catch (InterruptedException e) {
 			System.out.println("interrupted while trying to enqueue envelope in sender");
 			e.printStackTrace();
@@ -310,6 +310,12 @@ public class Connection<Message> {
 	 * Starts this Connection, enabling it to send and receive messages.
 	 * 
 	 * <p>
+	 * <b>Notice:</b><br>
+	 * Calling this method while Connection is already started (e.g: without calling {@link stop}) will be ignored
+	 * and the message handler will <b>not</b> be changed.
+	 * </p>
+	 * 
+	 * <p>
 	 * <b>Example use: </b><br>
 	 * <code>
 	 * conn.start(x -> handleIt(x))<br>
@@ -322,12 +328,6 @@ public class Connection<Message> {
 	 * And Message is the prototype supplied upon Connection instantiation.
 	 * </p>
 	 * 
-	 * <p>
-	 * <b>Notice:</b><br>
-	 * Calling this method while Connection is already started (e.g: without calling {@link stop}) will be ignored
-	 * and the message handler will <b>not</b> be changed.
-	 * </p>
-	 * 
 	 * @param handler - User-defined consumer to handle incoming messages.
 	 */
 	synchronized public void start(Consumer<Envelope<Message>> handler) {
@@ -336,7 +336,7 @@ public class Connection<Message> {
 		}
 		
 		if (this.killed) {
-			throw new RuntimeException("can only start a connection that has never started before, or was stopped, but not if it was killed");
+			throw new RuntimeException("connection cannot be re-started after it was killed");
 		}
 		
 		if (null == handler) {
@@ -392,7 +392,10 @@ public class Connection<Message> {
 	 * @see stop
 	 */
 	synchronized public void kill() {
-		if (this.killed) return; // ignore repeated calls
+		if (this.killed) {
+			System.out.println("Tried to kill an already dead connection... ignored");
+			return; // ignore repeated calls
+		}
 		
 		this.receiver.kill();
 		this.sender.kill();
@@ -436,6 +439,16 @@ public class Connection<Message> {
 	 */
 	public boolean isAlive() {
 		return this.isActive;
+	}
+	
+	
+	/**
+	 * Check if this Connection has been killed.
+	 * 
+	 * @return 'true' if {@link #kill()} was invoked, 'false' otherwise.
+	 */
+	public boolean wasKilled() {
+		return this.killed;
 	}
 	
 }

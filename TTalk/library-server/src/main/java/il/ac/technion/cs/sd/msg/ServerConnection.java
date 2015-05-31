@@ -34,10 +34,8 @@ public class ServerConnection<Message> {
 
 	// INSTANCE VARIABLES
 	private final Connection<Message> conn;
-	private BiConsumer<String, Message> consumer;
-	private boolean isActive = false;
-	private boolean killed = false;;
 	
+
 	/**
 	 * Constructor. Creates a server connection for accepting and handling incoming messages as well as sending back outgoing replies, 
 	 * using a custom {@link Codec} to encode/decode messages into the set Message type of the connection.<br>
@@ -47,9 +45,18 @@ public class ServerConnection<Message> {
 	 * @param codec - Custom codec for encoding/decoding messages.
 	 */
 	public ServerConnection(String address, Codec<Envelope<Message>> codec) {
+		if (null == address || "".equals(address)) {
+			throw new IllegalArgumentException("address cannot be null or empty");
+		}
+		
+		if (null == codec) {
+			throw new IllegalArgumentException("codec cannot be null");
+		}
+		
 		this.conn = new Connection<Message>(address, codec);
 	}
 
+	
 	/**
 	 * Constructor. Creates a server connection, accepting and handling incoming messages as well as sending back outgoing replies, 
 	 * using the default {@link Codec}. <br>
@@ -61,9 +68,17 @@ public class ServerConnection<Message> {
 		this(address, new XStreamCodec<Envelope<Message>>());
 	}
 
+	
 	/**
 	 * Starts this ServerConnection, enabling it to send and receive messages, handling each incoming message with 
 	 * the supplied User-defined handler. <br>
+	 * 
+	 * <p>
+	 * <b>Notice:</b><br>
+	 * <br>
+	 * Calling this method when connection is already active will be ignored, and handler will <b>NOT</b> be changed.
+	 * <br>
+	 * </p>
 	 * 
 	 * <p>
 	 * <b>Example usage:</b><br>
@@ -75,63 +90,32 @@ public class ServerConnection<Message> {
 	 * Where addr is always the source address, and msg is the received message, of type Message used for this ServerConnection's initialization.
 	 * </p>
 	 *
-	 *<p>
-	 * <b>Notice:</b><br>
-	 * <br>
-	 * Calling this method when connection is already active will be ignored, and handler will <b>NOT</b> be changed.
-	 * <br>
-	 * </p>
-	 * 
 	 * @param handler - A User (application) defined handler for all incoming messages, of type {@link BiConsumer}&lt;String, Message&gt;.<br>
 	 * @see stop
 	 */
 	synchronized public void start(BiConsumer<String, Message> handler) {
-		if (this.isActive) return; // ignore when already active
-		
-		if (this.killed ) {
-			throw new IllegalArgumentException("connection cannot be re-started after it was killed");
-		}
-		
 		if (null == handler) {
 			throw new IllegalArgumentException("handler cannot be null");
 		}
 		
-		this.consumer = handler;
-		this.conn.start(x -> handleIncomingMessage(x));
-		this.isActive  = true;
+		this.conn.start(env -> handler.accept(env.address, env.content));
 	}
 	
 	
 	/**
 	 * Stop (Pause) this ServerConnection. 
 	 * <p>When stopped, this connection does not receive, handle or send anything, but can be re-started
-	 * using the {@link Start} method.
-	 * <br>If the Connection was already stopped upon invocation, this does nothing. </p>
+	 * using the {@link Start} method.<br>
+	 * <br>
+	 * If the Connection was already stopped upon invocation, this does nothing. </p>
+	 * 
 	 * @see start
 	 * @see kill
 	 */
 	synchronized public void stop() {
 		this.conn.stop();
-		this.isActive = false;
 	}
 
-	
-	/**
-	 * Handle an incoming message, that is NOT an ACK (e.g: has actual contents).
-	 * An ACK is implicitly sent back immediately to the sender of the message, and the message is handled using
-	 * the consumer given to this ServerConnection upon initialization.
-	 * 	
-	 * @param env - Envelope containing the incoming message to be handled.
-	 */
-	private void handleIncomingMessage(Envelope<Message> env) {
-		if (null == this.consumer) {
-			throw new RuntimeException("WTF?! somehow started running and tried to handle before setting the consumer");
-		}
-		
-		// dispatch handling to a separate thread, which might add an outgoing message later, using the send() method
-		this.consumer.accept(env.address, env.content);
-	}
-	
 	
 	/**
 	 * Send out a message to a specific (client's) address. This is a <b>non-blocking</b> call.
@@ -140,15 +124,7 @@ public class ServerConnection<Message> {
 	 * @param content - User-defined message object to be sent.
 	 */
 	public void send(String to, Message content) {
-		if (this.killed) {
-			throw new RuntimeException("cannot send a message from a killed ServerConnection");
-		}
-		
-		if (!this.isActive) {
-			throw new RuntimeException("cannot send a message while ServerConnection is not active. Was it started? stoppped?");
-		}
-		
-		conn.send(to, content);
+		conn.send(to, content); // contents and connection state validation is done inside this.conn
 	}
 		
 	
@@ -162,14 +138,16 @@ public class ServerConnection<Message> {
 	 * </p>
 	 */
 	synchronized public void kill() {
-		if (this.killed) {
-			System.out.println("Tried to kill an already dead server connection... ignored");
-			return; // ignore trying to kill the connection more than once.
-		}
-		
-		conn.kill();
-		this.isActive = false;
-		this.killed = true;
+		conn.kill(); // connection state validation is done inside this.conn
 	}
 	
+	
+	/**
+	 * Get this ServerConnection's address.
+	 * 
+	 * @return this ServerConnection's address.
+	 */
+	public String myAddress() {
+		return this.conn.myAddress();
+	}
 }
