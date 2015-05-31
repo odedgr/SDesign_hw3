@@ -18,17 +18,12 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import org.aopalliance.intercept.Invocation;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-import org.mockito.internal.matchers.Any;
 
-import com.google.inject.matcher.Matchers;
-
-public class ClientMsgApplicationTest {
+ uzv public class ClientMsgApplicationTest {
 	
 	static class FriendshipReply {
 		public final String name;
@@ -46,7 +41,6 @@ public class ClientMsgApplicationTest {
 		}
 	}
 	
-	private static final String serverAddress = "ServerAddress";
 	private static final String clientAddress = "ClientAddress";
 	
 	ClientMsgApplication client;
@@ -70,6 +64,7 @@ public class ClientMsgApplicationTest {
 		client.stop();
 	}
 	
+	@SuppressWarnings("unchecked")
 	private void loginClient(Consumer<InstantMessage> messageConsumer,
 			Function<String, Boolean> friendshipRequestHandler,
 			BiConsumer<String, Boolean> friendshipReplyConsumer) {
@@ -156,7 +151,7 @@ public class ClientMsgApplicationTest {
 	public void isOnlineReturned() throws InterruptedException {
 		loginClient(im -> {}, s -> true, (x, y) -> {});
 		
-		// When a request is sent, return a response.
+		// When a request is sent via connection, send a response back to the client.
 		Mockito.doAnswer(invocation -> { 
 			sendToClient(new IsOnlineResponse("Someone", Optional.of(true)));
 			return null;
