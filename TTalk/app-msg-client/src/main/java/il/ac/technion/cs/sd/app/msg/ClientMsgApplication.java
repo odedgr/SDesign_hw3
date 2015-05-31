@@ -45,7 +45,7 @@ public class ClientMsgApplication {
 		}
 		
 		this.username = username;
-		this.connection = new ClientConnection<Exchange>(serverAddress, username, message -> message.accept(new Visitor()));
+		this.connection = new ClientConnection<Exchange>(serverAddress, username);
 	}
 	
 	/**
@@ -90,7 +90,7 @@ public class ClientMsgApplication {
 			Function<String, Boolean> friendshipRequestHandler,
 			BiConsumer<String, Boolean> friendshipReplyConsumer) {
 		
-		connection.start();
+		connection.start(message -> message.accept(new Visitor()));
 		
 		connection.send(new ConnectRequest());
 		this.messageConsumer = messageConsumer;
@@ -170,7 +170,7 @@ public class ClientMsgApplication {
 
 		@Override
 		public void visit(SendInstantMessageRequest request) {
-			throw new UnsupportedOperationException("The client should not get SendInstantMessageRequest.");
+			messageConsumer.accept(request.message);
 		}
 
 		@Override

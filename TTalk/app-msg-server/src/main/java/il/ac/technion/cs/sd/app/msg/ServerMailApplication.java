@@ -39,7 +39,7 @@ public class ServerMailApplication {
 		this.address = name;
 		this.data = new ServerData();
 		this.dataSaver = new FileDataSaver<ServerData>("app-msg-data-" + address);
-		this.connection = new ServerConnection<Exchange>(address, (sender, message) -> message.accept(new Visitor(sender)));
+		this.connection = new ServerConnection<Exchange>(address);
 	}
 	
 	/**
@@ -54,7 +54,7 @@ public class ServerMailApplication {
 	 * This should be a <b>non-blocking</b> call.
 	 */
 	public void start() {
-		connection.start();
+		connection.start((sender, message) -> message.accept(new Visitor(sender)));
 		loadData();
 	}
 	
