@@ -16,8 +16,12 @@ import java.util.function.Consumer;
  * A typical Connection creation and usage:<br><br>
  * 
  * <code> 
- * Connection&lt;Message&gt; conn = new Connection("myAddress", x -> handleMessage(x));
- * <br>conn.start();
+ * Connection&lt;Message&gt; conn = new Connection("myAddress");
+ * <br>conn.start(x -> handleMessage_1(x));
+ * <br>...
+ * <br>conn.stop()
+ * <br>...
+ * <br>conn.start(x -> handleMessage_2(x));
  * <br>...
  * <br>conn.kill();
  * </code><br><br>
@@ -34,14 +38,14 @@ public class Connection<Message> {
 	
 	// CONSTANTS
 	private static final String ACK = "";
-	private static final long ACK_TIMEOUT_IN_MILLISECONDS = 50L;
+	private static final long ACK_TIMEOUT_IN_MILLISECONDS = 50L; // time to wait for an ACK before re-sending
 	
 	// INSTANCE VARIABLES
 	private final Dispatcher<Message> receiver; // thread taking each incoming message from queue and dispatching a handler
 	private final Dispatcher<Message> sender; // thread in charge of sending outgoing messages from queue
 	private Messenger messenger; // can't be final, to support stop and restart
 	private final Codec<Envelope<Message>> codec;
-	private final MessengerFactory factory;
+	private final MessengerFactory factory; // used for messenger creation upon every call to start(...)
 	
 	private final String myAddress;
 	private boolean gotAck = false;
@@ -54,17 +58,12 @@ public class Connection<Message> {
 	
 	private final ExecutorService executor; // thread pool, for message handlers using supplied consumer
 	
-	// TODO update all constructors and javadoc with consumer change
-	
 	/**
 	 * Constructor. Creates a connection for accepting and handling incoming messages as well as sending back outgoing replies, 
 	 * using a custom {@link Codec} to encode/decode messages into the set Message type of the connection, and a custom MessengerFactory.<br>
-	 * <b>Notice:</b> created Connection is inactive until {@link #start} is invoked. 
+	 * <b>Notice:</b> created Connection is inactive until {@link #start(Consumer)} is invoked. 
 	 * 
 	 * @param myAddress - This connection's address.
-	 * @param handler - Application-defined function to handle raw incoming String messages. Will be applied for
-	 * each incoming message (that is not an ACK). Different "types" of messages should be classified and handled
-	 * accordingly on the application side.
 	 * @param codec - Custom {@link Codec} for encoding/decoding messages.
 	 * @param factory - {@link MessengerFactory}, used for creating {@link Messenger messengers} to handle low-level communication.
 	 */
@@ -89,12 +88,9 @@ public class Connection<Message> {
 	/**
 	 * Constructor. Creates a connection for accepting and handling incoming messages as well as sending back outgoing replies, 
 	 * using a custom {@link Codec} to encode/decode messages into the set Message type of the connection, and the default MessengerFactory.<br>
-	 * <b>Notice:</b> created Connection is inactive until {@link #start} is invoked. 
+	 * <b>Notice:</b> created Connection is inactive until {@link #start(Consumer)} is invoked. 
 	 * 
 	 * @param myAddress - This connection's address.
-	 * @param handler - Application-defined function to handle raw incoming String messages. Will be applied for
-	 * each incoming message (that is not an ACK). Different "types" of messages should be classified and handled
-	 * accordingly on the application side.
 	 * @param codec - Custom {@link Codec} for encoding/decoding messages.
 	 */
 	public Connection(String myAddress, Codec<Envelope<Message>> codec) {
@@ -105,12 +101,9 @@ public class Connection<Message> {
 	/**
 	 * Constructor. Creates a connection for accepting and handling incoming messages as well as sending back outgoing replies, 
 	 * using a default {@link Codec} to encode/decode messages into the set Message type of the connection, and the default MessengerFactory.<br>
-	 * <b>Notice:</b> created Connection is inactive until {@link #start} is invoked. 
+	 * <b>Notice:</b> created Connection is inactive until {@link #start(Consumer)} is invoked. 
 	 * 
 	 * @param myAddress - This connection's address.
-	 * @param handler - Application-defined function to handle raw incoming String messages. Will be applied for
-	 * each incoming message (that is not an ACK). Different "types" of messages should be classified and handled
-	 * accordingly on the application side.
 	 */
 	public Connection(String myAddress) {
 		this(myAddress, new XStreamCodec<>(), null);
@@ -118,9 +111,13 @@ public class Connection<Message> {
 	
 	
 	/**
-	 * Create and start a new Messenger to be used by this Connection, with a given address. 
-	 * <br>(*) If a Messenger was already active, this does nothing. 
-	 * <br>(*) If messenger creation failed, connection's state would be like after killing its Messenger.
+	 * Create and start a new Messenger to be used by this Connection, with a given address.
+	 * <p> 
+	 * <b>Notice:</b>
+	 * <br>(1) If a Messenger was already active, this does nothing. 
+	 * <br>(2) If messenger creation failed, connection's state would be like after killing its Messenger.
+	 * <br> --> consecutive calls are safe.
+	 * </p>
 	 * 
 	 * @param myAddress - Address to be bound to (used by) the newly created messenger.
 	 */
@@ -141,6 +138,8 @@ public class Connection<Message> {
 	
 	/**
 	 * Kill this connection's Messenger. If no Messenger was active - this does nothing.
+	 * <br><br>
+	 * consecutive calls are safe.
 	 */
 	private void killMessenger() {
 		if (null == this.messenger) return; // connection doesn't have an active messenger
@@ -155,12 +154,13 @@ public class Connection<Message> {
 		}
 	}
 	
+	
 	/**
-	 * Add an outgoing message to a client (either with or without content) to the outgoing message queue. 
+	 * Add an outgoing message (either with or without content) to the outgoing message queue. 
 	 * For convenience, you might consider using the {@link #sendAck(String to) sendAck} instead. 
 	 * 
-	 * @param to - Address of client to whom the message will be sent.
-	 * @param payload - Contents of message to send to the client.
+	 * @param to - Address of destination to whom the message will be sent.
+	 * @param payload - Contents of message to be sent..
 	 * @see {@link #sendAck(String to)}
 	 */
 	protected void send(String to, Message payload) {
@@ -193,8 +193,10 @@ public class Connection<Message> {
 	
 	/**
 	 * Do actual sending, with validation of arrival at the receiver side, re-sending periodically, until an ACK is received.
+	 * <br><br>
+	 * This is a <b>blocking</b> call.
 	 * 
-	 * @param env Envelope to be sent.
+	 * @param env - Envelope to be sent.
 	 */
 	protected void safeSend(Envelope<Message> env) {
 		this.gotAck = false;
@@ -216,6 +218,8 @@ public class Connection<Message> {
 	
 	/**
 	 * Sends an ACK (empty string) to a given address, guaranteed to be received by the recipient.
+	 * <br><br>
+	 * This is a <b>non-blocking</b> call.
 	 * 
 	 * @param to - Address of the ACK receiver.
 	 */
@@ -231,7 +235,7 @@ public class Connection<Message> {
 	
 	
 	/**
-	 * Handles a received ACK. Used to notify the transmitter thread that an awaited ACK has been received and it
+	 * Handles a received ACK. Used to notify the sender dispatcher that an awaited ACK has been received and it
 	 * can move on to the next outgoing message.
 	 */
 	protected void receivedAck() {
@@ -244,7 +248,7 @@ public class Connection<Message> {
 	
 	/**
 	 * Receive a raw incoming message, and put it in a FIFO queue for appropriate handling. If incoming message is
-	 * an ACK, than it is handled immediately, and not pushed into the incoming message queue. 
+	 * an ACK, than it is handled immediately, and not pushed into the incoming message queue for further handling. 
 	 *  
 	 * @param inMsg - Raw incoming message, as received from messenger.
 	 */
@@ -258,7 +262,7 @@ public class Connection<Message> {
 
 		if (inMsg.equals(ACK)) {
 			receivedAck();
-			return;
+			return; // no further handling
 		}
 
 		// add incoming message to queue for handling
@@ -272,9 +276,10 @@ public class Connection<Message> {
 	
 	/**
 	 * Get a COPY of all incoming Envelopes that were not yet handled (e.g: the incoming message queue).<br>
-	 * <b>Can only be called when connection is inactive (e.g: after calling {@link #kill})</b>
+	 * <br>
+	 * <b>Can only be called when connection is inactive (e.g: after calling {@link #kill() or {@link #stop}})</b>
 	 * 
-	 * @return
+	 * @return a Collection of all incoming messages that have not yet been handled.
 	 */
 	public Collection<Envelope<Message>> getUnhandled() {
 		if (this.isActive) {
@@ -286,10 +291,11 @@ public class Connection<Message> {
 	
 	
 	/**
-	 * Get all the outgoing Envelopes that were not yet sent out.<br>
-	 * <b>Can only be called when connection is inactive (e.g: after calling {@link #kill})</b>
+	 * Get all the outgoing Envelopes that were not yet sent out.
+	 * <br><br>
+	 * <b>Can only be called when connection is inactive (e.g: after calling {@link #kill} or {@link #stop})</b>
 	 * 
-	 * @return
+	 * @return a Collection of all outgoing messages that have not yet been sent.
 	 */
 	public Collection<Envelope<Message>> getUnsent() {
 		if (this.isActive) {
@@ -302,6 +308,27 @@ public class Connection<Message> {
 	
 	/**
 	 * Starts this Connection, enabling it to send and receive messages.
+	 * 
+	 * <p>
+	 * <b>Example use: </b><br>
+	 * <code>
+	 * conn.start(x -> handleIt(x))<br>
+	 * </code>
+	 * <br>
+	 * Where handleIt has a signature of: <br>
+	 * <br>
+	 * <code>void handleIt(Message m)</code><br>
+	 * <br>
+	 * And Message is the prototype supplied upon Connection instantiation.
+	 * </p>
+	 * 
+	 * <p>
+	 * <b>Notice:</b><br>
+	 * Calling this method while Connection is already started (e.g: without calling {@link stop}) will be ignored
+	 * and the message handler will <b>not</b> be changed.
+	 * </p>
+	 * 
+	 * @param handler - User-defined consumer to handle incoming messages.
 	 */
 	synchronized public void start(Consumer<Envelope<Message>> handler) {
 		if (this.isActive) { // already started - ignoring call
@@ -318,7 +345,7 @@ public class Connection<Message> {
 		
 		this.receiver.setHandler(x -> { sendAck(x.address); handler.accept(x); } ); // set upon each start, unlike sender
 		
-		if (!this.started) {
+		if (!this.started) { // this block is only executed once
 			this.receiver.startMe(); // start to take incoming messages from queue and handle them
 			this.sender.setHandler(x -> safeSend(x)); // only set once, upon initial start
 			this.sender.startMe();   // start to take outgoing messages from queue and send them one-by-one
@@ -334,8 +361,9 @@ public class Connection<Message> {
 	
 	/**
 	 * Stop (Pause) this Connection. <br>When stopped, this connection does not receive, handle or send anything, but can be re-started
-	 * using the {@link Start} method.
-	 * <br>If the Connection was already stopped upon invocation, this does nothing.
+	 * using the {@link Start} method.<br>
+	 * <br>
+	 * If the Connection was already stopped upon invocation, this does nothing.
 	 */
 	synchronized public void stop() {
 		if (!this.isActive) { // already stopped - ignoring call
@@ -352,15 +380,26 @@ public class Connection<Message> {
 	/**
 	 * Terminate this connection. Stops all handling of incoming messages, receiving and sending messages,
 	 * as well as killing its messenger.
+	 * 
+	 * <p>
+	 * <b>Notice:</b><br>
+	 * (1) A killed connection <b>cannot</b> be restarted, a different one has to be created instead. <br>
+	 * (2) Any un-handled messages are retrievable via {@link #getUnhandled()} and {@link #getUnsent()} <br>
+	 * (3) Calling this on an already killed connection is ignored. <br>  
+	 * </p>
+	 * 
+	 * @see stop
 	 */
 	synchronized public void kill() {
+		if (this.killed) return; // ignore repeated calls
+		
 		this.receiver.kill();
 		this.sender.kill();
 		this.isActive = false;
 		this.killed  = true;
 		this.executor.shutdown();
 		
-		killMessenger(); // has to be the last call, because dispatechers deppend on it
+		killMessenger(); // has to be the last call, because dispatechers depend on it
 	}
 	
 	
