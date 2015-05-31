@@ -13,8 +13,8 @@ import java.util.function.BiConsumer;
  * A typical ServerConnection creation and usage:<br><br>
  * 
  * <code> 
- * ServerConnection&lt;Message&gt; conn = new ServerConnection("server", handle);
- * <br>conn.start();
+ * ServerConnection&lt;Message&gt; conn = new ServerConnection("server");
+ * <br>conn.start(handle);
  * <br>...
  * <br>conn.kill();
  * </code><br><br>
@@ -35,10 +35,11 @@ public class ServerConnection<Message> {
 	// INSTANCE VARIABLES
 	private final Connection<Message> conn;
 	private BiConsumer<String, Message> consumer;
+	private boolean isActive = false;
+	private boolean killed = false;;
 	
-	// TODO update documentation
 	/**
-	 * Constructor. Creates a connection for accepting and handling incoming messages as well as sending back outgoing replies, 
+	 * Constructor. Creates a server connection for accepting and handling incoming messages as well as sending back outgoing replies, 
 	 * using a custom {@link Codec} to encode/decode messages into the set Message type of the connection.<br>
 	 * <b>Notice:</b> created Connection is inactive until {@link #start} is invoked. 
 	 * 
@@ -49,7 +50,6 @@ public class ServerConnection<Message> {
 		this.conn = new Connection<Message>(address, codec);
 	}
 
-	// TODO update documentation
 	/**
 	 * Constructor. Creates a server connection, accepting and handling incoming messages as well as sending back outgoing replies, 
 	 * using the default {@link Codec}. <br>
@@ -61,17 +61,44 @@ public class ServerConnection<Message> {
 		this(address, new XStreamCodec<Envelope<Message>>());
 	}
 
-	// TODO update documentation
 	/**
-	 * Starts this ServerConnection, enabling it to send and receive messages.
+	 * Starts this ServerConnection, enabling it to send and receive messages, handling each incoming message with 
+	 * the supplied User-defined handler. <br>
+	 * 
+	 * <p>
+	 * <b>Example usage:</b><br>
+	 * <br>
+	 * <code>
+	 * conn.start( (addr, msg) -> handleMsgFrom(msg, addr) );<br>
+	 * </code>
+	 * <br>
+	 * Where addr is always the source address, and msg is the received message, of type Message used for this ServerConnection's initialization.
+	 * </p>
+	 *
+	 *<p>
+	 * <b>Notice:</b><br>
+	 * <br>
+	 * Calling this method when connection is already active will be ignored, and handler will <b>NOT</b> be changed.
+	 * <br>
+	 * </p>
+	 * 
+	 * @param handler - A User (application) defined handler for all incoming messages, of type {@link BiConsumer}&lt;String, Message&gt;.<br>
+	 * @see stop
 	 */
-	public void start(BiConsumer<String, Message> handler) {
+	synchronized public void start(BiConsumer<String, Message> handler) {
+		if (this.isActive) return; // ignore when already active
+		
+		if (this.killed ) {
+			throw new IllegalArgumentException("connection cannot be re-started after it was killed");
+		}
+		
 		if (null == handler) {
 			throw new IllegalArgumentException("handler cannot be null");
 		}
 		
 		this.consumer = handler;
 		this.conn.start(x -> handleIncomingMessage(x));
+		this.isActive  = true;
 	}
 	
 	
@@ -80,12 +107,15 @@ public class ServerConnection<Message> {
 	 * <p>When stopped, this connection does not receive, handle or send anything, but can be re-started
 	 * using the {@link Start} method.
 	 * <br>If the Connection was already stopped upon invocation, this does nothing. </p>
+	 * @see start
+	 * @see kill
 	 */
-	public void stop() {
+	synchronized public void stop() {
 		this.conn.stop();
+		this.isActive = false;
 	}
-		
-	// TODO update documentation
+
+	
 	/**
 	 * Handle an incoming message, that is NOT an ACK (e.g: has actual contents).
 	 * An ACK is implicitly sent back immediately to the sender of the message, and the message is handled using
@@ -95,7 +125,7 @@ public class ServerConnection<Message> {
 	 */
 	private void handleIncomingMessage(Envelope<Message> env) {
 		if (null == this.consumer) {
-			throw new RuntimeException("WTF?! somehow started running before setting the consumer");
+			throw new RuntimeException("WTF?! somehow started running and tried to handle before setting the consumer");
 		}
 		
 		// dispatch handling to a separate thread, which might add an outgoing message later, using the send() method
@@ -104,12 +134,20 @@ public class ServerConnection<Message> {
 	
 	
 	/**
-	 * Send out a message to a specific (client's) address. <b>Non-blocking</b> call.
+	 * Send out a message to a specific (client's) address. This is a <b>non-blocking</b> call.
 	 * 
 	 * @param to - Address to which message will be sent.
 	 * @param content - User-defined message object to be sent.
 	 */
 	public void send(String to, Message content) {
+		if (this.killed) {
+			throw new RuntimeException("cannot send a message from a killed ServerConnection");
+		}
+		
+		if (!this.isActive) {
+			throw new RuntimeException("cannot send a message while ServerConnection is not active. Was it started? stoppped?");
+		}
+		
 		conn.send(to, content);
 	}
 		
@@ -117,9 +155,21 @@ public class ServerConnection<Message> {
 	/**
 	 * Terminate this connection. Stops all handling of incoming messages, receiving and sending messages,
 	 * as well as killing its messenger.
+	 * 
+	 * <p>
+	 * <b>Notice:</b><br>
+	 * Repeated calls are ignored.
+	 * </p>
 	 */
-	public void kill() {
+	synchronized public void kill() {
+		if (this.killed) {
+			System.out.println("Tried to kill an already dead server connection... ignored");
+			return; // ignore trying to kill the connection more than once.
+		}
+		
 		conn.kill();
+		this.isActive = false;
+		this.killed = true;
 	}
 	
 }

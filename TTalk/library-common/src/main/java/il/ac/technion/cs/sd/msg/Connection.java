@@ -360,7 +360,8 @@ public class Connection<Message> {
 	
 	
 	/**
-	 * Stop (Pause) this Connection. <br>When stopped, this connection does not receive, handle or send anything, but can be re-started
+	 * Stop (Pause) this Connection. <br>
+	 * When stopped, this connection does not receive, handle or send anything, but can be re-started
 	 * using the {@link Start} method.<br>
 	 * <br>
 	 * If the Connection was already stopped upon invocation, this does nothing.
