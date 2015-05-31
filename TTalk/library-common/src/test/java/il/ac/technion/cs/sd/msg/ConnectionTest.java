@@ -94,7 +94,6 @@ public class ConnectionTest {
 			});
 		
 		final Messenger m = new MessengerFactory().start("m", x -> {
-//				System.out.println("m got message");	
 				messengerReceivedMessages.offer(x);
 			});
 		
@@ -112,6 +111,9 @@ public class ConnectionTest {
 		m.kill();
  	}
 	
+	// TODO kill twice does nothing
+	// TODO can't restart after kill
+	// TODO restart with new different handler
 	// TODO identify a received ACK
 	// TODO ACK is sent after a non-empty message is received
 	// TODO ACK is NOT sent in response to receiving an ACK
