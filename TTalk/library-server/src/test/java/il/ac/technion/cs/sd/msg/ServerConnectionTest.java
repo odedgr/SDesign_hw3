@@ -22,13 +22,15 @@ public class ServerConnectionTest {
 
 	private Map<String, ServerConnection<?>> connections = new HashMap<String, ServerConnection<?>>();
 	private BiConsumer<String, Object> shouldntHandleObject = (addr, msg) -> System.out.println("should not have been called");
-	private BiConsumer<String, String> shouldntHandleString = (addr, msg) -> System.out.println("should not have been called");
 	private Consumer<String> noConsumer = (x -> x = null) ;
 	private final Collection<Messenger>	messengers = new ArrayList<>();
 	
 	// MESSENGER GENERATORS
 	private Messenger startAndAddToList() throws Exception {
-		return startAndAddToList(messengers.size() + "", x -> System.out.println("[messenger consumer] got \"" + x + "\""));
+		return startAndAddToList(messengers.size() + "", x -> {
+			/*System.out.println("[messenger consumer] got \"" + x + "\"")*/
+			assertTrue(true);
+		});
 	}
 	
 	private Messenger startAndAddToList(String address) throws Exception {
@@ -44,45 +46,53 @@ public class ServerConnectionTest {
 			} catch (MessengerException e) {
 				address = address + i;
 			}
-			
 		}
+		
 		messengers.add($);
 		return $;
 	}
 	
 	// CONNECTION GENERATORS
 	private <T> ServerConnection<T> buildConnection(String address, Codec<Envelope<T>> codec) {
-		ServerConnection<T> conn = new ServerConnection<>(address, codec);
+		ServerConnection<T> conn = null;
+		
+		for(int i = 0; null == conn && i < 10; ++i) {
+			try {
+				conn = new ServerConnection<>(address + i, codec);
+			} catch (Exception e) {
+				address = address + i;
+			}
+		}
+		
+		
 		connections.put(address, conn);
 		return conn;
 	}
 	
 	private <T> ServerConnection<T> buildConnection(String address) {
-		ServerConnection<T> conn = new ServerConnection<>(address);
-		connections.put(address, conn);
-		return conn;
+		return buildConnection(address, new XStreamCodec<>());
 	}
 	
 	private <T> ServerConnection<T> buildConnection(Codec<Envelope<T>> codec) {
-		String num = Integer.toString(this.connections.size());
-		
-		while (this.connections.containsKey("server_" + num)) {
-			System.out.println("address \"" + num + "\" is taken...");
-			num = Integer.toString(1 + Integer.parseInt(num));
-		}
+		String num = getFreeNum();
 		
 		return buildConnection("server_" + num, codec);
 	}
 	
 	private <T> ServerConnection<T> buildConnection() {
+		String num = getFreeNum();
+		
+		return buildConnection("server_" + num);
+	}
+
+	private String getFreeNum() {
 		String num = Integer.toString(this.connections.size());
 		
 		while (this.connections.containsKey("server_" + num)) {
 			System.out.println("address \"" + num + "\" is taken...");
 			num = Integer.toString(1 + Integer.parseInt(num));
 		}
-		
-		return buildConnection("server_" + num);
+		return num;
 	}
 	
 	private String getXmlEnvelope(String address, String content) {
@@ -121,18 +131,17 @@ public class ServerConnectionTest {
 	
 	@Test (expected=IllegalArgumentException.class)
 	public void cantCreateConnectionWithNullAddress() {
-		buildConnection((String)null);
+		new ServerConnection<>(null);
 	}
 	
 	@Test (expected=IllegalArgumentException.class)
 	public void cantCreateConnectionWithEmptyAddress() {
-		buildConnection("");
-		
+		new ServerConnection<>("");
 	}
 	
 	@Test (expected=IllegalArgumentException.class)
 	public void cantCreateConnectionWithNullCodec() {
-		buildConnection("server", null);
+		new ServerConnection<>("sc", null); // should throw exception
 	}
 	
 	@Test (expected=RuntimeException.class)
@@ -199,24 +208,29 @@ public class ServerConnectionTest {
 		sc.start(shouldntHandleObject);
 	}
 	
-	@Test
+	@Test (timeout=10000L)
 	public void restartChangesHandler() throws Exception { // TODO debug
+		int iterations = 50;
+		long sleeptime = 5L;
+		
 		List<String> first = new ArrayList<String>();
 		List<String> second = new ArrayList<String>();
 		
 		Messenger m = startAndAddToList("m");
 		String xml = getXmlEnvelope(m.getAddress(), "hi");
-		
 		ServerConnection<Object> sc = buildConnection();
+
 		sc.start((addr, x) -> first.add((String) x));
-		for (int i = 0; i < 300; ++i) {
+		for (int i = 0; i < iterations; ++i) {
+			Thread.sleep(sleeptime);
 			m.send(sc.myAddress(), xml);
 		}
 		
 		sc.stop();
 		sc.start((addr, x) -> second.add((String) x));
 		
-		for (int i = 0; i < 300; ++i) {
+		for (int i = 0; i < iterations; ++i) {
+			Thread.sleep(sleeptime);
 			m.send(sc.myAddress(), xml);
 		}
 		
@@ -225,41 +239,48 @@ public class ServerConnectionTest {
 	}
 	
 	@Test
-	public void repeatedStartDoesNothing() {
-		fail("Not Implemented");
+	public void repeatedStartDoesNothing() throws Exception {
+		int iterations = 20;
+		long sleeptime = 5L;
+		
+		List<String> first = new ArrayList<String>();
+		List<String> second = new ArrayList<String>();
+		
+		Messenger m = startAndAddToList();
+		ServerConnection<String> sc = buildConnection();
+		sc.start((addr, x) -> first.add(x));
+		sc.start((addr, x) -> second.add(x));
+		
+		String xml = getXmlEnvelope(m.getAddress(), "hi");
+		
+		for (int i = 0; i < iterations; ++i) {
+			Thread.sleep(sleeptime);
+			m.send(sc.myAddress(), xml);
+		}
+		
+		assertTrue(second.isEmpty());
 	}
 	
-	@Test //(timeout=10000L)
+	@Test (timeout=10000L)
 	public void handlerIsExecuted() throws Exception {
+		int iterations = 100;
 		Queue<String> list = new LinkedBlockingQueue<String>();
 		Messenger m = startAndAddToList();
 		String xml = getXmlEnvelope(m.getAddress(), "hi");
 		ServerConnection<String> sc = buildConnection();
 		
-		
-		
-		sc.start((addr, x) -> { System.out.println("[tester] sc handler got " + x); list.add(x);});
-		for (int i = 0; i < 100; ++i) { // send a lot to make sure something was received
+		sc.start((addr, x) -> list.add(x));
+		for (int i = 0; i < iterations; ++i) { // send a lot to make sure something was received
 			Thread.sleep(10L);
-			System.out.println("[tester] sending " + i);
+//			System.out.println("[tester] sending " + i);
 			m.send(sc.myAddress(), xml);
 		}
 		
-		
 		assertTrue(!list.isEmpty());
+		System.out.println("loss percentage: " + 100.0 * (1.0 - 1.0 * list.size() / iterations));
 	}
 	
 }
-
-/*
- * start
- * stop
- * C'tor
- * kill
- * send
- * 
- */
-
 
 
 	// TODO simple object is reconstructed after sending
