@@ -93,7 +93,7 @@ public class ServerConnection<Message> {
 	 * @param handler - A User (application) defined handler for all incoming messages, of type {@link BiConsumer}&lt;String, Message&gt;.<br>
 	 * @see stop
 	 */
-	synchronized public void start(BiConsumer<String, Message> handler) {
+	public void start(BiConsumer<String, Message> handler) {
 		if (null == handler) {
 			throw new IllegalArgumentException("handler cannot be null");
 		}
@@ -112,7 +112,7 @@ public class ServerConnection<Message> {
 	 * @see start
 	 * @see kill
 	 */
-	synchronized public void stop() {
+	public void stop() {
 		this.conn.stop();
 	}
 
@@ -124,6 +124,10 @@ public class ServerConnection<Message> {
 	 * @param content - User-defined message object to be sent.
 	 */
 	public void send(String to, Message content) {
+		if ("".equals(content)) {
+			throw new RuntimeException("server will not send empty messages");
+		}
+		
 		conn.send(to, content); // contents and connection state validation is done inside this.conn
 	}
 		
@@ -137,7 +141,7 @@ public class ServerConnection<Message> {
 	 * Repeated calls are ignored.
 	 * </p>
 	 */
-	synchronized public void kill() {
+	public void kill() {
 		conn.kill(); // connection state validation is done inside this.conn
 	}
 	
@@ -150,4 +154,5 @@ public class ServerConnection<Message> {
 	public String myAddress() {
 		return this.conn.myAddress();
 	}
+	
 }

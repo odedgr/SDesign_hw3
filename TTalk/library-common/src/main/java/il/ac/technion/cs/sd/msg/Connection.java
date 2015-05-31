@@ -82,6 +82,9 @@ public class Connection<Message> {
 		this.receiver  = new Dispatcher<Message>();
 		this.sender    = new Dispatcher<Message>();
 		this.codec     = codec;
+		
+		this.receiver.setName("Dispatcher-Receiver");
+		this.sender.setName("Dispatcher-Sender");
 	}
 	
 	
@@ -172,12 +175,12 @@ public class Connection<Message> {
 			throw new IllegalArgumentException("contents to send cannot be null");
 		}
 		
-		if (!this.isActive) {
+		if (!this.isActive || this.killed) {
 			throw new RuntimeException("cannot send when connection is inactive");
 		}
 		
 		if (ACK.equals(message)) { // send an ACK - no need to wait for incoming ACK in return
-			sendAck(to);
+			System.out.println("don't use send() to send ACK or empty messages. use sendAck instead");
 			return;
 		}
 		
@@ -225,10 +228,12 @@ public class Connection<Message> {
 	 */
 	public void sendAck(String to) {
 		try {
-			System.out.println("seding ACK");
+//			System.out.println("[connection] sending ACK to " + to);
 			this.messenger.send(to, ACK);
+//			System.out.println("[connection] ACK sent");
 		} catch (MessengerException e) {
-			System.out.println("DEBUG - ServerConnection.sendAck() - MessengerException when tried to send ACK to " + to);
+//			System.out.println("[connection] - sendAck() - MessengerException when tried to send ACK to " + to);
+//			System.out.println(e.getMessage());
 			throw new RuntimeException(e);
 		}
 	}
@@ -330,7 +335,7 @@ public class Connection<Message> {
 	 * 
 	 * @param handler - User-defined consumer to handle incoming messages.
 	 */
-	synchronized public void start(Consumer<Envelope<Message>> handler) {
+	public void start(Consumer<Envelope<Message>> handler) {
 		if (this.isActive) { // already started - ignoring call
 			return;
 		}
@@ -366,7 +371,7 @@ public class Connection<Message> {
 	 * <br>
 	 * If the Connection was already stopped upon invocation, this does nothing.
 	 */
-	synchronized public void stop() {
+	public void stop() {
 		if (!this.isActive) { // already stopped - ignoring call
 			return;
 		}
@@ -391,10 +396,13 @@ public class Connection<Message> {
 	 * 
 	 * @see stop
 	 */
-	synchronized public void kill() {
+	public void kill() {
 		if (this.killed) {
-			System.out.println("Tried to kill an already dead connection... ignored");
 			return; // ignore repeated calls
+		}
+		
+		if (!this.started) {
+			throw new RuntimeException("cannot kill the connection before starting it...");
 		}
 		
 		this.receiver.kill();
@@ -449,6 +457,16 @@ public class Connection<Message> {
 	 */
 	public boolean wasKilled() {
 		return this.killed;
+	}
+	
+	
+	/**
+	 * Check if this Connection has been started.
+	 * 
+	 * @return 'true' if {@link #kill()} was invoked, 'false' otherwise.
+	 */
+	public boolean wasStarted() {
+		return this.started;
 	}
 	
 }

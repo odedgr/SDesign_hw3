@@ -31,6 +31,8 @@ public class Dispatcher<Message> extends Thread {
 	private boolean isPaused = false;	// set to 'true' upon calling pause(), to 'false' upon calling unpause()
 	private boolean killed = false; 	// only set to 'true' after started and was killed
 	private boolean ignoreIncoming = false;
+
+	private boolean doneKilling = false;
 	
 	
 	/**
@@ -111,6 +113,8 @@ public class Dispatcher<Message> extends Thread {
 		
 		flushQueue(); // no need to explicitly block enqueuing, done within enqueue when killed
 		this.ignoreIncoming = false; // set flag back, to invoke exceptions when trying to enqueue a killed dispatcher
+		
+		this.doneKilling = true;
 	}
 
 	
@@ -138,7 +142,9 @@ public class Dispatcher<Message> extends Thread {
 	private void tryToHandleFromQueue() throws InterruptedException {
 		Envelope<Message> env = this.queue.poll(TAKE_MSG_TIMEOUT, TimeUnit.MILLISECONDS); // don't use take(), to allow for killing
 		if (null != env) {
+//			System.out.println("[dispatcher] handling message " + env.content.toString());
 			this.consumer.accept(env);
+//			System.out.println("[dispatcher] handling done");
 		}
 	}
 
@@ -146,9 +152,13 @@ public class Dispatcher<Message> extends Thread {
 	/**
 	 * Cleanly stops the dispatcher, allowing for a single Message to complete its handling.
 	 */
-	public void kill() {
+	synchronized public void kill() {
 		this.killed = true;
 		this.ignoreIncoming = true;
+		
+		while (!this.doneKilling ) {
+			Thread.yield(); // need this to allow for other thread to complete kill procedure
+		};
 	}
 	
 	
@@ -158,7 +168,7 @@ public class Dispatcher<Message> extends Thread {
 	 * Messages are not lost, and any handling that has started will be complete.<br>
 	 * Also, new messages <i>can</i> be enqueued while dispatcher is paused.
 	 */
-	public void pause() {
+	synchronized public void pause() {
 		if (this.killed) {
 			throw new RuntimeException("cannot pause a dispatcher that was already killed");
 		}
@@ -174,7 +184,7 @@ public class Dispatcher<Message> extends Thread {
 	/**
 	 * Resume handling messages by this dispatcher.
 	 */
-	public void unpause() {
+	synchronized public void unpause() {
 		if (!this.started) { // catches cases where dispatcher was already stopped as well
 			throw new RuntimeException("can only unpause a live (already started, not yet killed) dispatcher");
 		}

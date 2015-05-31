@@ -135,6 +135,10 @@ public class ClientConnection<Message> {
 	 * @param content - User-defined message object to be sent.
 	 */
 	public void send(Message content) {
+		if ("".equals(content)) {
+			throw new RuntimeException("client will not send empty messages");
+		}
+		
 		conn.send(this.myServer, content); // contents and connection state validation is done inside this.conn
 	}
 	
