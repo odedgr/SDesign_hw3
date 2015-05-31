@@ -22,5 +22,24 @@ public class IsOnlineRequest implements Exchange {
 		v.visit(this);
 
 	}
+	
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		IsOnlineRequest other = (IsOnlineRequest)obj;
+		
+		if (who == null) {
+			if (other.who != null)
+				return false;
+		} else if (!who.equals(other.who))
+			return false;
+		
+		return true;
+	}
 
 }

@@ -25,4 +25,21 @@ public class FriendRequest implements Exchange {
 	public void accept(ExchangeVisitor v) {
 		v.visit(this);
 	}
+	
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		FriendRequest other = (FriendRequest)obj;
+		if (invitation == null) {
+			if (other.invitation != null)
+				return false;
+		} else if (!invitation.equals(other.invitation))
+			return false;
+		return true;
+	}
 }

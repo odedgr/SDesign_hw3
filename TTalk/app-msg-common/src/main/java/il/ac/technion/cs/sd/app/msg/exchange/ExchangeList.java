@@ -23,5 +23,24 @@ public class ExchangeList implements Exchange {
 	public void accept(ExchangeVisitor v) {
 		v.visit(this);
 	}
+	
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		ExchangeList other = (ExchangeList)obj;
+		
+		if (list == null) {
+			if (other.list != null)
+				return false;
+		} else if (!list.equals(other.list))
+			return false;
+		
+		return true;
+	}
 
 }
