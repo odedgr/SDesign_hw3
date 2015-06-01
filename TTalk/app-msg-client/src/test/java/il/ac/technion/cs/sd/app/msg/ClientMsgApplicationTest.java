@@ -23,7 +23,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
 
- uzv public class ClientMsgApplicationTest {
+ public class ClientMsgApplicationTest {
 	
 	static class FriendshipReply {
 		public final String name;
