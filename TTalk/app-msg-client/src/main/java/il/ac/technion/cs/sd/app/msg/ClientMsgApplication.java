@@ -93,6 +93,9 @@ public class ClientMsgApplication {
 	public void login(Consumer<InstantMessage> messageConsumer,
 			Function<String, Boolean> friendshipRequestHandler,
 			BiConsumer<String, Boolean> friendshipReplyConsumer) {
+		if (messageConsumer == null || friendshipRequestHandler == null || friendshipReplyConsumer == null) {
+			throw new IllegalArgumentException();
+		}
 		
 		connection.start(message -> message.accept(new Visitor()));
 		

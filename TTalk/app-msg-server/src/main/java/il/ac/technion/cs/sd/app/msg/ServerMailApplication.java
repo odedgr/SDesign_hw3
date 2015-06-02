@@ -36,6 +36,9 @@ public class ServerMailApplication {
      * @param name The name of the server by which it is known.
      */
 	public ServerMailApplication(String name) {
+		if (name == null || name.isEmpty()) {
+			throw new IllegalArgumentException();
+		}
 		this.address = name;
 		this.data = new ServerData();
 		this.dataSaver = new XStreamDataSaver<ServerData>("app-msg-data-" + address);
@@ -58,6 +61,9 @@ public class ServerMailApplication {
 	 * @param connection The connection to use.
 	 */
 	private ServerMailApplication(String name, ServerConnection<Exchange> connection) {
+		if (name == null || name.isEmpty() || connection == null) {
+			throw new IllegalArgumentException();
+		}
 		this.address = name;
 		this.data = new ServerData();
 		this.dataSaver = new XStreamDataSaver<ServerData>("app-msg-data-" + address);
