@@ -26,6 +26,11 @@ public class ConnectionUnitTest {
 	private void sendToConnection(Envelope<String> toSend) {
 		consumer.accept(codec.encode(toSend));
 	}
+	
+	private void simluateAckToConnection() throws InterruptedException {
+		Thread.sleep(connection.getAckTimeout() / 2);
+		consumer.accept(""); // simulate receiving ACK
+	}
 
 	@Before
 	public void setUp() throws Exception {
@@ -92,22 +97,26 @@ public class ConnectionUnitTest {
 	@Test(timeout=1000)
 	public void verifyAllMessagesAreSentBeforeConnectionStops() throws MessengerException, InterruptedException {
 		connection.send("aFriend", "Yoyoyoyoyo");
+		simluateAckToConnection();
 		connection.stop();
 		Mockito.verify(messenger).send("aFriend", codec.encode(Envelope.<String>wrap("aFriend", "Yoyoyoyoyo")));
 	}
 	
-	@Test(timeout=1000)
+	@Test (timeout=1000)
 	public void verifyAllMessagesAreSentBeforeConnectionKilled() throws MessengerException, InterruptedException {
 		connection.send("aFriend", "Yoyoyoyoyo");
+		simluateAckToConnection();
 		connection.kill();
 		Mockito.verify(messenger).send("aFriend", codec.encode(Envelope.<String>wrap("aFriend", "Yoyoyoyoyo")));
 	}
 
 	@Test
 	public void testReceive() throws MessengerException, InterruptedException {
-		String message = "Howdy!";
+		String message = "Howdy 1!";
 		Envelope<String> env = Envelope.<String>wrap("addr", message);
 		sendToConnection(env);
+		
+		Thread.sleep(50L); // give chance to handle incoming message
 		
 		// Verify this string was accepted by the connection
 		Envelope<String> received = receivedEnvelopes.take(); 
@@ -116,12 +125,14 @@ public class ConnectionUnitTest {
 		assertEquals(env.content, received.content);
 	}
 	
-	@Test(timeout=1000)
+	@Test (timeout=1000)
 	public void verifyAllMessagesAreReceivedBeforeConnectionStops() throws MessengerException, InterruptedException {
-		String message = "Howdy!";
+		String message = "Howdy 2!";
 		Envelope<String> env = Envelope.<String>wrap("addr", message);
 		sendToConnection(env);
 		connection.stop();
+		
+		Thread.sleep(50L); // give chance to handle incoming message
 		
 		// Verify this string was accepted by the connection
 		Envelope<String> received = receivedEnvelopes.take(); 

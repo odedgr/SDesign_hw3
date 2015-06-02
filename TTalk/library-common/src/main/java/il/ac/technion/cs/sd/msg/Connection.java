@@ -50,6 +50,7 @@ public class Connection<Message> {
 	private final String myAddress;
 	private boolean gotAck = false;
 	private final Object ackNotifier = new Object();
+	private Object messengerLock = new Object();
 	
 	/* Connection state */
 	private boolean isActive = false; // set to 'true' upon each call to startMe(), 'false' upon stop() or kill()
@@ -147,13 +148,15 @@ public class Connection<Message> {
 	private void killMessenger() {
 		if (null == this.messenger) return; // connection doesn't have an active messenger
 		
-		try {
-			this.messenger.kill();
-		} catch (MessengerException e) {
-			System.out.println("MessengerException when trying to kill messenger in Connection");
-			throw new RuntimeException(e);
-		} finally {
-			this.messenger = null;
+		synchronized (this.messengerLock) {
+			try {
+				this.messenger.kill();
+			} catch (MessengerException e) {
+				System.out.println("MessengerException when trying to kill messenger in Connection");
+				throw new RuntimeException(e);
+			} finally {
+				this.messenger = null;
+			}
 		}
 	}
 	
@@ -186,6 +189,7 @@ public class Connection<Message> {
 		
 		// by here we know we are trying to send a message with contents - need to make sure it was received
 		try {
+//			System.out.println("enqueueing to sender: " + Envelope.wrap(to, message).toString());
 			this.sender.enqueue(Envelope.wrap(to, message));
 		} catch (InterruptedException e) {
 			System.out.println("interrupted while trying to enqueue envelope in sender");
@@ -203,18 +207,22 @@ public class Connection<Message> {
 	 */
 	protected void safeSend(Envelope<Message> env) {
 		this.gotAck = false;
-		
+//		System.out.println("safe sending " + env.toString());
 		synchronized (this.ackNotifier) {
 			do {
 				try {
-					this.messenger.send(env.address, this.codec.encode(env));
+					synchronized (this.messengerLock) { // protect in case messenger was killed by calling stop()
+						if (null != this.messenger) {
+							this.messenger.send(env.address, this.codec.encode(env));
+						}
+					}
 					this.ackNotifier.wait(ACK_TIMEOUT_IN_MILLISECONDS);
 				} catch (MessengerException e) {
 					throw new RuntimeException(e);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
-			} while (!this.gotAck);
+			} while (!this.gotAck && !this.killed);
 		}
 	}
 	
@@ -228,12 +236,12 @@ public class Connection<Message> {
 	 */
 	public void sendAck(String to) {
 		try {
-//			System.out.println("[connection] sending ACK to " + to);
-			this.messenger.send(to, ACK);
-//			System.out.println("[connection] ACK sent");
+			synchronized (this.messengerLock ) {
+				if (null != this.messenger) {
+					this.messenger.send(to, ACK);
+				}
+			}
 		} catch (MessengerException e) {
-//			System.out.println("[connection] - sendAck() - MessengerException when tried to send ACK to " + to);
-//			System.out.println(e.getMessage());
 			throw new RuntimeException(e);
 		}
 	}
@@ -272,6 +280,7 @@ public class Connection<Message> {
 
 		// add incoming message to queue for handling
 		try {
+//			System.out.println("enqueueing to receiver: " + inMsg);
 			this.receiver.enqueue(codec.decode(inMsg));
 		} catch (InterruptedException e) {
 			System.out.println("interrupted while trying to put an incoming message in the incoming queue. ignoring it.");
@@ -335,7 +344,7 @@ public class Connection<Message> {
 	 * 
 	 * @param handler - User-defined consumer to handle incoming messages.
 	 */
-	public void start(Consumer<Envelope<Message>> handler) {
+	synchronized public void start(Consumer<Envelope<Message>> handler) {
 		if (this.isActive) { // already started - ignoring call
 			return;
 		}
@@ -371,7 +380,7 @@ public class Connection<Message> {
 	 * <br>
 	 * If the Connection was already stopped upon invocation, this does nothing.
 	 */
-	public void stop() {
+	synchronized public void stop() {
 		if (!this.isActive) { // already stopped - ignoring call
 			return;
 		}
@@ -396,7 +405,7 @@ public class Connection<Message> {
 	 * 
 	 * @see stop
 	 */
-	public void kill() {
+	synchronized public void kill() {
 		if (this.killed) {
 			return; // ignore repeated calls
 		}
