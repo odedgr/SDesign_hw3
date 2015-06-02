@@ -38,8 +38,30 @@ public class ServerMailApplication {
 	public ServerMailApplication(String name) {
 		this.address = name;
 		this.data = new ServerData();
-		this.dataSaver = new FileDataSaver<ServerData>("app-msg-data-" + address);
+		this.dataSaver = new XStreamDataSaver<ServerData>("app-msg-data-" + address);
 		this.connection = new ServerConnection<Exchange>(address);
+	}
+	
+	/**
+	 * Creates a new mail server, using a mock connection.
+	 * @param name The name of the server by which it is known.
+	 * @param connection The mock connection to use.
+	 * @return
+	 */
+	public static ServerMailApplication createWithMockConnection(String name, ServerConnection<Exchange> connection) {
+		return new ServerMailApplication(name, connection);
+	}
+	
+	/**
+	 * Starts a new mail server with a given connection instance.
+	 * @param name The name of the server by which it is known.
+	 * @param connection The connection to use.
+	 */
+	private ServerMailApplication(String name, ServerConnection<Exchange> connection) {
+		this.address = name;
+		this.data = new ServerData();
+		this.dataSaver = new XStreamDataSaver<ServerData>("app-msg-data-" + address);
+		this.connection = connection;
 	}
 	
 	/**
