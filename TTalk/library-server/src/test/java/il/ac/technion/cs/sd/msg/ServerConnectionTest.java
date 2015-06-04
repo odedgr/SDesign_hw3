@@ -1,126 +1,63 @@
 package il.ac.technion.cs.sd.msg;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Queue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 
 public class ServerConnectionTest {
 
-	private Map<String, ServerConnection<?>> connections = new HashMap<String, ServerConnection<?>>();
-	private BiConsumer<String, Object> shouldntHandleObject = (addr, msg) -> System.out.println("should not have been called");
-	private Consumer<String> noConsumer = (x -> x = null) ;
-	private final Collection<Messenger>	messengers = new ArrayList<>();
+	private final String serverAddress = "serverAddress";
 	
-	// MESSENGER GENERATORS
-	private Messenger startAndAddToList() throws Exception {
-		return startAndAddToList(messengers.size() + "", x -> {
-			/*System.out.println("[messenger consumer] got \"" + x + "\"")*/
-			assertTrue(true);
-		});
-	}
-	
-	private Messenger startAndAddToList(String address) throws Exception {
-		return startAndAddToList(address, noConsumer);
-	}
-	
-	private Messenger startAndAddToList(String address, Consumer<String> c) throws Exception {
-		Messenger $ = null;
-		
-		for(int i = 0; null == $ && i < 10; ++i) {
-			try {
-				$ = new MessengerFactory().start(address + "_m", c);
-			} catch (MessengerException e) {
-				address = address + i;
-			}
-		}
-		
-		messengers.add($);
-		return $;
-	}
-	
-	// CONNECTION GENERATORS
-	private <T> ServerConnection<T> buildConnection(String address, Codec<Envelope<T>> codec) {
-		ServerConnection<T> conn = null;
-		
-		for(int i = 0; null == conn && i < 10; ++i) {
-			try {
-				conn = new ServerConnection<>(address + i, codec);
-			} catch (Exception e) {
-				address = address + i;
-			}
-		}
-		
-		
-		connections.put(address, conn);
-		return conn;
-	}
-	
-	private <T> ServerConnection<T> buildConnection(String address) {
-		return buildConnection(address, new XStreamCodec<>());
-	}
-	
-	private <T> ServerConnection<T> buildConnection(Codec<Envelope<T>> codec) {
-		String num = getFreeNum();
-		
-		return buildConnection("server_" + num, codec);
-	}
-	
-	private <T> ServerConnection<T> buildConnection() {
-		String num = getFreeNum();
-		
-		return buildConnection("server_" + num);
-	}
+	private ServerConnection<String> sc;
+	private Connection<String> conn;
+	private Messenger m;
+	Codec<Envelope<String>> codec;
+	Consumer<String> consumer;
+	Map<String, String> receivedEnvelopes = new HashMap<String, String>();
 
-	private String getFreeNum() {
-		String num = Integer.toString(this.connections.size());
-		
-		while (this.connections.containsKey("server_" + num)) {
-			System.out.println("address \"" + num + "\" is taken...");
-			num = Integer.toString(1 + Integer.parseInt(num));
-		}
-		return num;
+	private BiConsumer<String, String> defaultBiConsumer = (addr, msg) -> receivedEnvelopes.put(addr, msg);
+//	private BiConsumer<String, String> printerBiConsumer = (addr, msg) -> System.out.println("Connection got \"" + msg + "\" from " + addr);
+	
+	private void sendToConnection(Envelope<String> toSend) throws InterruptedException {
+		consumer.accept(codec.encode(toSend));
+		Thread.sleep(2L); // give connection threads chance to do their thing
 	}
 	
-	private String getXmlEnvelope(String address, String content) {
-		Envelope<String> dummyEnvelope = Envelope.wrap(address, content);
-		return new XStreamCodec<>().encode(dummyEnvelope);
-	}
 	
+	
+	@SuppressWarnings("unchecked")
 	@Before
 	public void setUp() throws Exception {
+		m = Mockito.mock(Messenger.class);
+		codec = new XStreamCodec<Envelope<String>>();
+		
+		// Create a factory that extracts the consumer and passes the mock messenger.
+		MessengerFactory factory = Mockito.mock(MessengerFactory.class);
+		Mockito.doAnswer(invocation -> {
+			consumer = (Consumer<String>) invocation.getArguments()[1];
+			return m;
+		}).when(factory).start(Mockito.eq(serverAddress), Mockito.any());
+		
+		conn = new Connection<String>(serverAddress, new XStreamCodec<Envelope<String>>(), factory);
+		sc = new ServerConnection<String>(conn);
+		
+		receivedEnvelopes.clear();
 	}
 
 	@After
 	public void tearDown() throws Exception {
-		for (ServerConnection<?> sc : this.connections.values()) {
-			try {
-				sc.kill();
-			} catch (RuntimeException e) {
-				// do nothing
-			}
-		}
-		
-		this.connections.clear();
-		
-		for (Messenger m: messengers) {
-			try {
-				m.kill();
-			} catch (Exception e) {/* do nothing */}
-			
+		if (conn.wasStarted()) {
+			sc.kill();
 		}
 	}
 
@@ -131,7 +68,12 @@ public class ServerConnectionTest {
 	
 	@Test (expected=IllegalArgumentException.class)
 	public void cantCreateConnectionWithNullAddress() {
-		new ServerConnection<>(null);
+		new ServerConnection<>((String) null);
+	}
+	
+	@Test (expected=IllegalArgumentException.class)
+	public void cantCreateConnectionWithNullConnection() {
+		new ServerConnection<>((Connection<?>) null);
 	}
 	
 	@Test (expected=IllegalArgumentException.class)
@@ -146,139 +88,91 @@ public class ServerConnectionTest {
 	
 	@Test (expected=RuntimeException.class)
 	public void cantSendAfterKillingConnection() {
-		ServerConnection<Object> sc = buildConnection();
-		sc.start(shouldntHandleObject);
+		sc.start(defaultBiConsumer);
 		sc.kill();
 		sc.send("whoever", "should not be sent");
 	}
 	
 	@Test (expected=RuntimeException.class)
 	public void cantSendBeforeStartingConnection() {
-		ServerConnection<String> sc = buildConnection();
 		sc.send("whoever", "should not be sent");
 	}
 	
 	@Test (expected=RuntimeException.class)
 	public void cantSendEmptyMessage() {
-		ServerConnection<Object> sc = buildConnection();
-		sc.start(shouldntHandleObject);
+		sc.start(defaultBiConsumer);
 		sc.send("whoever", "");
 	}
 	
 	@Test (expected=IllegalArgumentException.class)
 	public void cantSendNullMessage() {
-		ServerConnection<Object> sc = buildConnection();
-		sc.start(shouldntHandleObject);
+		sc.start(defaultBiConsumer);
 		sc.send("whoever", null);
 	}
 	
 	@Test (expected=IllegalArgumentException.class)
 	public void cantSendToNullAddress() {
-		ServerConnection<Object> sc = buildConnection();
-		sc.start(shouldntHandleObject);
+		sc.start(defaultBiConsumer);
 		sc.send(null, "should not be sent");
 	}
 	
 	@Test (expected=IllegalArgumentException.class)
 	public void cantSendToEmptyAddress() {
-		ServerConnection<Object> sc = buildConnection();
-		sc.start(shouldntHandleObject);
+		sc.start(defaultBiConsumer);
 		sc.send("", "should not be sent");
 	}
 	
 	@Test
 	public void killingTwiceDoesNothing() {
-		ServerConnection<Object> sc = buildConnection();
-		sc.start(shouldntHandleObject);
+		sc.start(defaultBiConsumer);
 		sc.kill();
 		sc.kill();
 	}
 
 	@Test (expected=IllegalArgumentException.class)
 	public void cantStartWithNullConsumer() {
-		ServerConnection<Object> sc = buildConnection();
 		sc.start(null);		
 	}
 	
 	@Test (expected=RuntimeException.class)
 	public void cantRestartAfterKill() {
-		ServerConnection<Object> sc = buildConnection();
-		sc.start(shouldntHandleObject);
+		sc.start(defaultBiConsumer);
 		sc.kill();
-		sc.start(shouldntHandleObject);
+		sc.start(defaultBiConsumer);
 	}
 	
-	@Test (timeout=10000L)
-	public void restartChangesHandler() throws Exception { // TODO debug
-		int iterations = 20;
-		long sleeptime = 5L;
+	@Test
+	public void restartChangesHandler() throws Exception { 
+		Map<String, String> secondReceived = new HashMap<String, String>();
 		
-		List<String> first = new ArrayList<String>();
-		List<String> second = new ArrayList<String>();
-		
-		Messenger m = startAndAddToList("m");
-		String xml = getXmlEnvelope(m.getAddress(), "hi");
-		ServerConnection<Object> sc = buildConnection();
-
-		sc.start((addr, x) -> first.add((String) x));
-		for (int i = 0; i < iterations; ++i) {
-			Thread.sleep(sleeptime);
-			m.send(sc.myAddress(), xml);
-		}
-		
+		sc.start(defaultBiConsumer);
+		sendToConnection(Envelope.wrap("first", "bla bla"));
 		sc.stop();
-		sc.start((addr, x) -> second.add((String) x));
 		
-		for (int i = 0; i < iterations; ++i) {
-			Thread.sleep(sleeptime);
-			m.send(sc.myAddress(), xml);
-		}
+		sc.start((addr, msg) -> secondReceived.put(addr, msg));
+		sendToConnection(Envelope.wrap("second", "bla bla"));
 		
-		assertTrue(!first.isEmpty());
-		assertTrue(!second.isEmpty());
+		assertFalse(receivedEnvelopes.keySet().contains("second"));
+		assertTrue(secondReceived.keySet().contains("second"));
 	}
 	
 	@Test
 	public void repeatedStartDoesNothing() throws Exception {
-		int iterations = 20;
-		long sleeptime = 5L;
+		Map<String, String> secondReceived = new HashMap<String, String>();
 		
-		List<String> first = new ArrayList<String>();
-		List<String> second = new ArrayList<String>();
+		sc.start(defaultBiConsumer);
+		sc.start((addr, msg) -> secondReceived.put(addr, msg));
+		sendToConnection(Envelope.wrap("first", "bla bla"));
 		
-		Messenger m = startAndAddToList();
-		ServerConnection<String> sc = buildConnection();
-		sc.start((addr, x) -> first.add(x));
-		sc.start((addr, x) -> second.add(x));
-		
-		String xml = getXmlEnvelope(m.getAddress(), "hi");
-		
-		for (int i = 0; i < iterations; ++i) {
-			Thread.sleep(sleeptime);
-			m.send(sc.myAddress(), xml);
-		}
-		
-		assertTrue(second.isEmpty());
+		assertTrue(receivedEnvelopes.keySet().contains("first"));
+		assertFalse(secondReceived.keySet().contains("first"));
 	}
 	
-	@Test (timeout=10000L)
+	@Test
 	public void handlerIsExecuted() throws Exception {
-		int iterations = 20;
-		long sleeptime = 5L;
-		
-		Queue<String> list = new LinkedBlockingQueue<String>();
-		Messenger m = startAndAddToList();
-		String xml = getXmlEnvelope(m.getAddress(), "hi");
-		ServerConnection<String> sc = buildConnection();
-		
-		sc.start((addr, x) -> list.add(x));
-		for (int i = 0; i < iterations; ++i) { // send a lot to make sure something was received
-			Thread.sleep(sleeptime);
-			m.send(sc.myAddress(), xml);
-		}
-		
-		assertTrue(!list.isEmpty());
-		System.out.println("loss percentage: " + 100.0 * (1.0 - 1.0 * list.size() / iterations));
+		sc.start(defaultBiConsumer);
+		sendToConnection(Envelope.wrap("none", "something"));
+		assertTrue(!receivedEnvelopes.isEmpty());
 	}
 	
 }

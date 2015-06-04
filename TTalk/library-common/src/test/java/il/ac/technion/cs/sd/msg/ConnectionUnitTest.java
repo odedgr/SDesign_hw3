@@ -18,7 +18,6 @@ public class ConnectionUnitTest {
 	private BlockingQueue<Envelope<String>> receivedEnvelopes = new LinkedBlockingQueue<>();
 	
 	Connection<String> connection;
-	
 	Messenger messenger;
 	Consumer<String> consumer;
 	Codec<Envelope<String>> codec;
@@ -32,6 +31,7 @@ public class ConnectionUnitTest {
 		consumer.accept(""); // simulate receiving ACK
 	}
 
+	@SuppressWarnings("unchecked")
 	@Before
 	public void setUp() throws Exception {
 		messenger = Mockito.mock(Messenger.class);
