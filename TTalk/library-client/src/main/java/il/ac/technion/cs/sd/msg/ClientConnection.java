@@ -1,5 +1,6 @@
 package il.ac.technion.cs.sd.msg;
 
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -69,10 +70,39 @@ public class ClientConnection<Message> {
 	 * <b>Notice:</b> created Connection is inactive until {@link #start} is invoked. 
 	 * 
 	 * @param myAddress - This client address.
-	 * @param serverAddress
+	 * @param serverAddress - Address of the server via which this client communicates
 	 */
 	public ClientConnection(String serverAddress, String myAddress) {
 		this(serverAddress, myAddress, new XStreamCodec<Envelope<Message>>());
+	}
+	
+	/**
+	 * Constructor. Creates a server connection, accepting and handling incoming messages as well as sending back outgoing replies, 
+	 * using a custom Connection<Message> object. <br> The state of the new ServerConnection will match that of the given Connection.
+	 * E.g: will need to call {@link #start} with a supplied {@link BiConsumer} if Connection.start(...) wasn't previously called.
+	 * 
+	 * <p>
+	 * <code>
+	 * Connection&lt;String&gt; conn = new Connection<String>(serverAddress); <br>
+	 * ServerConnection&lt;String&gt; sc = new ServerConnection<String>(conn);<br>
+	 * sc.start((addr, msg) -> System.out.println("message " + msg.toString());
+	 * </code>
+	 * </p>
+	 * 
+	 * @param serverAddress - address of this ClientConnection's server
+	 * @param connection - The Connection object to be used by this ServerConnection.
+	 */
+	public ClientConnection(String serverAddress, Connection<Message> connection) {
+		if (null == connection) {
+			throw new IllegalArgumentException("connection cannot be null");
+		}
+		
+		if (null == serverAddress || "".equals(serverAddress)) {
+			throw new IllegalArgumentException("invalid server address - empty or null");
+		}
+		
+		this.myServer = serverAddress;
+		this.conn = connection;
 	}
 	
 	
