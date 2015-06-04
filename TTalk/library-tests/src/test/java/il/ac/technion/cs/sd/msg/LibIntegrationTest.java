@@ -27,7 +27,7 @@ public class LibIntegrationTest {
 	
 	@Before
 	public void setUp() throws Exception {
-		server.start((from, msg) -> serverMessages.add(Envelope.wrap(from, msg)));
+		server.start((from, msg) -> serverMessages.add(Envelope.wrap(from, "to", msg)));
 	}
 	
 	private ClientConnection<String> buildClient(String name) {
@@ -45,18 +45,18 @@ public class LibIntegrationTest {
 		clients.stream().forEach(client->client.kill());
 	}
 
-//	@Test
-//	public void ServerToClientReceivedInOrder() throws InterruptedException {
-//		ClientConnection<String> client1 = buildClient("client1");
-//		ClientConnection<String> client2 = buildClient("client2");
-//		server.send("client1", "one");
-//		server.send("client2", "two");
-//		server.send("client1", "three");
-//		
-//		assertEquals("two", clientMessages.get("client2").take());
-//		assertEquals("one", clientMessages.get("client1").take());
-//		assertEquals("three", clientMessages.get("client1").take());
-//	}
+	@Test
+	public void ServerToClientReceivedInOrder() throws InterruptedException {
+		ClientConnection<String> client1 = buildClient("client1");
+		ClientConnection<String> client2 = buildClient("client2");
+		server.send("client1", "one");
+		server.send("client2", "two");
+		server.send("client1", "three");
+		
+		assertEquals("two", clientMessages.get("client2").take());
+		assertEquals("one", clientMessages.get("client1").take());
+		assertEquals("three", clientMessages.get("client1").take());
+	}
 	
 	@Test
 	public void ClientToServerReceivedInOrder() throws InterruptedException {
@@ -72,27 +72,30 @@ public class LibIntegrationTest {
 		{
 			Envelope<String> env = serverMessages.take();
 			assertEquals("one", env.content);
-			assertEquals("client1", env.address);
+			assertEquals("client1", env.from);
 		}
+		System.out.println("A");
 		{
 			Envelope<String> env = serverMessages.take();
 			assertEquals("two", env.content);
-			assertEquals("client1", env.address);
+			assertEquals("client1", env.from);
 		}
+		System.out.println("B");
 		{
 			Envelope<String> env = serverMessages.take();
 			assertEquals("three", env.content);
-			assertEquals("client2", env.address);
+			assertEquals("client2", env.from);
 		}
+		System.out.println("C");
 		{
 			Envelope<String> env = serverMessages.take();
 			assertEquals("four", env.content);
-			assertEquals("client1", env.address);
+			assertEquals("client1", env.from);
 		}
 		{
 			Envelope<String> env = serverMessages.take();
 			assertEquals("five", env.content);
-			assertEquals("client2", env.address);
+			assertEquals("client2", env.from);
 		}
 	}
 	
