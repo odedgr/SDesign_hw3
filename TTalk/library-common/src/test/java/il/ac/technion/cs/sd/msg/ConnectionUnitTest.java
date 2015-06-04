@@ -91,7 +91,7 @@ public class ConnectionUnitTest {
 		connection.send("aFriend", "Yoyoyoyoyo");
 		// It may take time until the message is actually invoked.
 		Thread.sleep(10);
-		Mockito.verify(messenger).send("aFriend", codec.encode(Envelope.<String>wrap("aFriend", "Yoyoyoyoyo")));
+		Mockito.verify(messenger).send("aFriend", codec.encode(Envelope.<String>wrap(connection.myAddress(), "aFriend", "Yoyoyoyoyo")));
 	}
 	
 	@Test(timeout=1000)
@@ -99,7 +99,7 @@ public class ConnectionUnitTest {
 		connection.send("aFriend", "Yoyoyoyoyo");
 		simluateAckToConnection();
 		connection.stop();
-		Mockito.verify(messenger).send("aFriend", codec.encode(Envelope.<String>wrap("aFriend", "Yoyoyoyoyo")));
+		Mockito.verify(messenger).send("aFriend", codec.encode(Envelope.<String>wrap(connection.myAddress(), "aFriend", "Yoyoyoyoyo")));
 	}
 	
 	@Test (timeout=1000)
@@ -107,13 +107,13 @@ public class ConnectionUnitTest {
 		connection.send("aFriend", "Yoyoyoyoyo");
 		simluateAckToConnection();
 		connection.kill();
-		Mockito.verify(messenger).send("aFriend", codec.encode(Envelope.<String>wrap("aFriend", "Yoyoyoyoyo")));
+		Mockito.verify(messenger).send("aFriend", codec.encode(Envelope.<String>wrap(connection.myAddress(), "aFriend", "Yoyoyoyoyo")));
 	}
 
 	@Test
 	public void testReceive() throws MessengerException, InterruptedException {
 		String message = "Howdy 1!";
-		Envelope<String> env = Envelope.<String>wrap("addr", message);
+		Envelope<String> env = Envelope.<String>wrap(connection.myAddress(), "addr", message);
 		sendToConnection(env);
 		
 		Thread.sleep(50L); // give chance to handle incoming message
@@ -121,14 +121,14 @@ public class ConnectionUnitTest {
 		// Verify this string was accepted by the connection
 		Envelope<String> received = receivedEnvelopes.take(); 
 				assertTrue(receivedEnvelopes.isEmpty());
-		assertEquals(env.address, received.address);
+		assertEquals(env.from, received.from);
 		assertEquals(env.content, received.content);
 	}
 	
 	@Test (timeout=1000)
 	public void verifyAllMessagesAreReceivedBeforeConnectionStops() throws MessengerException, InterruptedException {
 		String message = "Howdy 2!";
-		Envelope<String> env = Envelope.<String>wrap("addr", message);
+		Envelope<String> env = Envelope.<String>wrap(connection.myAddress(), "addr", message);
 		sendToConnection(env);
 		connection.stop();
 		
@@ -137,7 +137,7 @@ public class ConnectionUnitTest {
 		// Verify this string was accepted by the connection
 		Envelope<String> received = receivedEnvelopes.take(); 
 				assertTrue(receivedEnvelopes.isEmpty());
-		assertEquals(env.address, received.address);
+		assertEquals(env.from, received.from);
 		assertEquals(env.content, received.content);
 	}
 }

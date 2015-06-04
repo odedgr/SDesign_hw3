@@ -190,7 +190,8 @@ public class Connection<Message> {
 		// by here we know we are trying to send a message with contents - need to make sure it was received
 		try {
 //			System.out.println("enqueueing to sender: " + Envelope.wrap(to, message).toString());
-			this.sender.enqueue(Envelope.wrap(to, message));
+			System.out.println(myAddress + " sending " + to + " message: \"" + message + "\"");
+			this.sender.enqueue(Envelope.wrap(myAddress, to, message));
 		} catch (InterruptedException e) {
 			System.out.println("interrupted while trying to enqueue envelope in sender");
 			e.printStackTrace();
@@ -205,7 +206,7 @@ public class Connection<Message> {
 	 * 
 	 * @param env - Envelope to be sent.
 	 */
-	protected void safeSend(Envelope<Message> env) {
+	private void safeSend(Envelope<Message> env) {
 		this.gotAck = false;
 //		System.out.println("safe sending " + env.toString());
 		synchronized (this.ackNotifier) {
@@ -213,7 +214,7 @@ public class Connection<Message> {
 				try {
 					synchronized (this.messengerLock) { // protect in case messenger was killed by calling stop()
 						if (null != this.messenger) {
-							this.messenger.send(env.address, this.codec.encode(env));
+							this.messenger.send(env.to, this.codec.encode(env));
 						}
 					}
 					this.ackNotifier.wait(ACK_TIMEOUT_IN_MILLISECONDS);
@@ -238,6 +239,8 @@ public class Connection<Message> {
 		try {
 			synchronized (this.messengerLock ) {
 				if (null != this.messenger) {
+					System.out.println(myAddress + " sending ACK to " + to);
+					
 					this.messenger.send(to, ACK);
 				}
 			}
@@ -252,6 +255,9 @@ public class Connection<Message> {
 	 * can move on to the next outgoing message.
 	 */
 	protected void receivedAck() {
+		
+		System.out.println(myAddress + " got an ACK");
+		
 		synchronized (ackNotifier) {
 			this.gotAck = true;
 			ackNotifier.notify();
@@ -357,7 +363,7 @@ public class Connection<Message> {
 			throw new IllegalArgumentException("handler cannot be null");
 		}
 		
-		this.receiver.setHandler(x -> { sendAck(x.address); handler.accept(x); } ); // set upon each start, unlike sender
+		this.receiver.setHandler(x -> { sendAck(x.from); handler.accept(x); } ); // set upon each start, unlike sender
 		
 		if (!this.started) { // this block is only executed once
 			this.receiver.startMe(); // start to take incoming messages from queue and handle them

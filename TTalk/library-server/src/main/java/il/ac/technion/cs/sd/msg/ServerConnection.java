@@ -121,7 +121,7 @@ public class ServerConnection<Message> {
 			throw new IllegalArgumentException("handler cannot be null");
 		}
 		
-		this.conn.start(env -> handler.accept(env.address, env.content));
+		this.conn.start(env -> handler.accept(env.from, env.content));
 	}
 	
 	

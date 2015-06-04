@@ -137,11 +137,11 @@ public class ClientConnectionTest {
 		List<String> secondReceived = new ArrayList<String>();
 
 		cc.start(defaultConsumer);
-		sendToConnection(Envelope.wrap("someone", "first"));
+		sendToConnection(Envelope.wrap("someone", cc.myAddress(), "first"));
 		cc.stop();
 
 		cc.start((msg) -> secondReceived.add(msg));
-		sendToConnection(Envelope.wrap("none", "second"));
+		sendToConnection(Envelope.wrap("none", cc.myAddress(), "second"));
 
 		assertFalse(receivedEnvelopes.contains("second"));
 		assertTrue(secondReceived.contains("second"));
@@ -153,7 +153,7 @@ public class ClientConnectionTest {
 
 		cc.start(defaultConsumer);
 		cc.start((msg) -> secondReceived.add(msg));
-		sendToConnection(Envelope.wrap("someone", "first"));
+		sendToConnection(Envelope.wrap("someone", cc.myAddress(), "first"));
 
 		assertTrue(receivedEnvelopes.contains("first"));
 		assertFalse(secondReceived.contains("first"));
@@ -162,7 +162,7 @@ public class ClientConnectionTest {
 	@Test
 	public void handlerIsExecuted() throws Exception {
 		cc.start(defaultConsumer);
-		sendToConnection(Envelope.wrap("none", "something"));
+		sendToConnection(Envelope.wrap("none", cc.myAddress(), "something"));
 		assertTrue(!receivedEnvelopes.isEmpty());
 	}
 

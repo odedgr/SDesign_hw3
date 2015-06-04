@@ -14,7 +14,9 @@ package il.ac.technion.cs.sd.msg;
 public class Envelope<Message> {
 
 	// INSTANCE VARIABLES
-	public final String address;
+//	public final String address;
+	public final String from;
+	public final String to;
 	public final Message content;
 	
 	/**
@@ -24,38 +26,43 @@ public class Envelope<Message> {
 	 * @param content A non-null Message to be wrapped in the Envelope. Cannot be <b><code>null</code></b>.
 	 * @return A new Envelope encapsulating the supplied message with the given address.
 	 */
-	public static <Message> Envelope<Message> wrap(String addr, Message content) {
-		if (null == addr || null == content) {
+//	public static <Message> Envelope<Message> wrap(String addr, Message content) {
+	public static <Message> Envelope<Message> wrap(String from, String to, Message content) {
+		if (null == from || null == to || null == content) {
 			throw new IllegalArgumentException("address and payload can't be null");
 		}
 		
-		if ("".equals(addr)) {
+		if ("".equals(from) || "".equals(to)) {
 			throw new IllegalArgumentException("address can't be empty");
 		}
 		
-		return new Envelope<Message>(addr, content);
+		return new Envelope<Message>(from, to, content);
 	}
 	
 	/**
 	 * C'tor for an Envelope. Intended for internal use only.<br><br> 
 	 * You should probably use {@link wrap} instead.
 	 */
-	private Envelope(String addr, Message content) {
-		this.address = addr;
+	private Envelope(String from, String to, Message content) {
+		this.from = from;
+		this.to = to;
 		this.content = content;
+		
 	}
 	
 	/**
 	 * Default C'tor for an Envelope. <b>This should NOT be used.</b> Use {@link wrap} instead.
 	 */
 	private Envelope() { // default constructor is blocked 
-		this.address = null; 
+//		this.address = null;
+		this.from = null;
+		this.to = null;
 		this.content = null;
 	}
 	
 	
 	@Override
 	public String toString() {
-		return "address = " + this.address + ", content = " + content.toString();
+		return "from = " + this.from + " to = " + this.to + ", content = " + content.toString();
 	}
 }

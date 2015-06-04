@@ -146,11 +146,11 @@ public class ServerConnectionTest {
 		Map<String, String> secondReceived = new HashMap<String, String>();
 		
 		sc.start(defaultBiConsumer);
-		sendToConnection(Envelope.wrap("first", "bla bla"));
+		sendToConnection(Envelope.wrap("first", sc.myAddress(), "bla bla"));
 		sc.stop();
 		
 		sc.start((addr, msg) -> secondReceived.put(addr, msg));
-		sendToConnection(Envelope.wrap("second", "bla bla"));
+		sendToConnection(Envelope.wrap("second", sc.myAddress(), "bla bla"));
 		
 		assertFalse(receivedEnvelopes.keySet().contains("second"));
 		assertTrue(secondReceived.keySet().contains("second"));
@@ -162,7 +162,7 @@ public class ServerConnectionTest {
 		
 		sc.start(defaultBiConsumer);
 		sc.start((addr, msg) -> secondReceived.put(addr, msg));
-		sendToConnection(Envelope.wrap("first", "bla bla"));
+		sendToConnection(Envelope.wrap("first", sc.myAddress(), "bla bla"));
 		
 		assertTrue(receivedEnvelopes.keySet().contains("first"));
 		assertFalse(secondReceived.keySet().contains("first"));
@@ -171,13 +171,10 @@ public class ServerConnectionTest {
 	@Test
 	public void handlerIsExecuted() throws Exception {
 		sc.start(defaultBiConsumer);
-		sendToConnection(Envelope.wrap("none", "something"));
+		sendToConnection(Envelope.wrap("none", sc.myAddress(), "something"));
 		assertTrue(!receivedEnvelopes.isEmpty());
 	}
 	
 }
 
-
-	// TODO simple object is reconstructed after sending
-	// TODO complex object is reconstructed after sending
 

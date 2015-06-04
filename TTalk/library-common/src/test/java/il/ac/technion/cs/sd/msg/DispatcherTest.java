@@ -16,7 +16,7 @@ import org.junit.Test;
 
 public class DispatcherTest {
 
-	private static final Envelope<Object> dummyEnvelope = Envelope.wrap("dummy envelope", new Object());
+	private static final Envelope<Object> dummyEnvelope = Envelope.wrap("tester", "dummy envelope", new Object());
 	List<Dispatcher<Object>> dispatchers = new ArrayList<Dispatcher<Object>>();
 	
 	@SuppressWarnings("unchecked")
@@ -85,7 +85,7 @@ public class DispatcherTest {
 		List<Envelope<Object>> jobsInEnvelopes = new ArrayList<>();
 		
 		for (Integer i : jobs) {
-			Envelope<Object> env = Envelope.wrap(i.toString(), i);
+			Envelope<Object> env = Envelope.wrap("tester", i.toString(), i);
 			jobsInEnvelopes.add(env);
 			disp.enqueue(env);
 		}
@@ -103,7 +103,7 @@ public class DispatcherTest {
 		disp.startMe();
 
 		for (Integer i : jobs) {
-			Envelope<Object> env = Envelope.wrap(i.toString(), i);
+			Envelope<Object> env = Envelope.wrap("tester", i.toString(), i);
 			jobsInEnvelopes.add(env);
 			disp.enqueue(env);
 		}
@@ -116,7 +116,7 @@ public class DispatcherTest {
 	@Test
 	public void onlyUnhandledJobsReturned() throws InterruptedException {
 		
-		final long BLOCK_TIME = 10L;
+		final long BLOCK_TIME = 20L;
 		
 		List<Integer> jobs = Arrays.asList(1, 2, 3, 4);
 		List<Envelope<Object>> jobsInEnvelopes = new ArrayList<>();
@@ -126,12 +126,13 @@ public class DispatcherTest {
 		disp.startMe();
 
 		for (Integer i : jobs) {
-			Envelope<Object> env = Envelope.wrap(i.toString(), i);
+			Envelope<Object> env = Envelope.wrap("tester", i.toString(), i);
 			jobsInEnvelopes.add(env);
 			disp.enqueue(env);
 		}
 		
-		Thread.sleep((long)(BLOCK_TIME * 1.2)); // allow for a single job to be handled
+		Thread.sleep((long)(BLOCK_TIME * 1.5)); // allow for a single job to be handled
+		disp.pause();
 		
 		assertEquals(unhandledJobs, disp.getUnhandled().stream().map(x -> x.content).collect(Collectors.toList()));
 	}
@@ -150,7 +151,7 @@ public class DispatcherTest {
 		public void run() {
 			for (int j = 0; j < 10; ++j) {
 				try {
-					this.disp.enqueue(Envelope.wrap(Integer.toString(id), j));
+					this.disp.enqueue(Envelope.wrap("tester", Integer.toString(id), j));
 					if (0 == System.nanoTime() % 2) {
 						Random rand = new Random();
 						int randNum = rand.nextInt(5000);
