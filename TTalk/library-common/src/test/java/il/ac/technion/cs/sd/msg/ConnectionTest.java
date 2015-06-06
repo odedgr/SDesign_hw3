@@ -28,9 +28,7 @@ public class ConnectionTest {
 	@After
 	public void tearDown() throws Exception {
 		for (Connection<?> c : connections) {
-			if (c.isAlive()) {
-				c.kill();
-			}
+			c.stop();
 		}
 		connections.clear();
 	}
@@ -73,7 +71,7 @@ public class ConnectionTest {
 	public void cantSendAfterKillingConnection() throws InterruptedException {
 		Connection<String> conn = buildConnection(DUMMY_CONN_ADDRESS);
 		Thread.sleep(10L);
-		conn.kill();
+		conn.stop();
 		conn.send("dummy2", "never sent");
  	}
 	
@@ -98,14 +96,14 @@ public class ConnectionTest {
 			});
 		
 		conn.send("m", "hello");
-		Thread.sleep(conn.getAckTimeout() * 3); // plenty of time to send more than a single message
+		Thread.sleep(conn.ACK_TIMEOUT_IN_MILLISECONDS * 3); // plenty of time to send more than a single message
 		
 		m.send(DUMMY_CONN_ADDRESS, ""); // send ACK to stop re-sending
 		Thread.sleep(10L);
 		int amountSentFromConn = messengerReceivedMessages.size(); 
 		assertTrue("Connection should have re-sent at least once", amountSentFromConn > 1);
 		
-		Thread.sleep(conn.getAckTimeout() * 2); // give time to re-send more (shouldn't happen)
+		Thread.sleep(conn.ACK_TIMEOUT_IN_MILLISECONDS * 2); // give time to re-send more (shouldn't happen)
 		assertEquals("should have received no more messages after the ACK", amountSentFromConn, messengerReceivedMessages.size());
 		
 		m.kill();

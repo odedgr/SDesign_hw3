@@ -26,15 +26,24 @@ public class ConnectionUnitTest {
 		consumer.accept(codec.encode(toSend));
 	}
 	
-	private void simluateAckToConnection() throws InterruptedException {
-		Thread.sleep(connection.getAckTimeout() / 2);
-		consumer.accept(""); // simulate receiving ACK
-	}
-
 	@SuppressWarnings("unchecked")
 	@Before
 	public void setUp() throws Exception {
+		// Create a messenger that sometimes returns an ack.
 		messenger = Mockito.mock(Messenger.class);
+		Mockito.doAnswer(invocation -> {
+			if (((String)invocation.getArguments()[1]).equals("")) {
+				// Never return acks to acks.
+				return null;
+			}
+			
+			if (Math.random() < 0.3) {
+				Thread.sleep(connection.ACK_TIMEOUT_IN_MILLISECONDS / 2);
+				consumer.accept("");
+			}
+			return null;
+		}).when(messenger).send(Mockito.anyString(), Mockito.any());
+		
 		codec = new XStreamCodec<Envelope<String>>();
 		
 		// Create a factory that extracts the consumer and passes the mock messenger.
@@ -44,7 +53,7 @@ public class ConnectionUnitTest {
 			return messenger;
 		}).when(factory).start(Mockito.eq(clientAddress), Mockito.any());
 		
-		connection = new Connection<String>(clientAddress, new XStreamCodec<Envelope<String>>(), factory);
+		connection = new Connection<String>(clientAddress, codec, factory);
 		connection.start(env->receivedEnvelopes.add(env));
 	}
 
@@ -65,49 +74,23 @@ public class ConnectionUnitTest {
 	}
 	
 	@Test
-	public void testKill() throws MessengerException {
-		connection.kill();
-		Mockito.verify(messenger).kill();
-	}
-
-	@Test
 	public void testMyAddress() {
 		assertEquals(clientAddress, connection.myAddress());
 	}
 
 	@Test
-	public void testIsAlive() {
-		assertTrue(connection.isAlive());
-		connection.stop();
-		assertFalse(connection.isAlive());
-		connection.start(e -> {});
-		assertTrue(connection.isAlive());
-		connection.kill();
-		assertFalse(connection.isAlive());
-	}
-	
-	@Test
 	public void testSend() throws MessengerException, InterruptedException {
 		connection.send("aFriend", "Yoyoyoyoyo");
 		// It may take time until the message is actually invoked.
 		Thread.sleep(10);
-		Mockito.verify(messenger).send("aFriend", codec.encode(Envelope.<String>wrap(connection.myAddress(), "aFriend", "Yoyoyoyoyo")));
+		Mockito.verify(messenger, Mockito.atLeastOnce()).send("aFriend", codec.encode(Envelope.<String>wrap(connection.myAddress(), "aFriend", "Yoyoyoyoyo")));
 	}
 	
 	@Test(timeout=1000)
 	public void verifyAllMessagesAreSentBeforeConnectionStops() throws MessengerException, InterruptedException {
 		connection.send("aFriend", "Yoyoyoyoyo");
-		simluateAckToConnection();
 		connection.stop();
-		Mockito.verify(messenger).send("aFriend", codec.encode(Envelope.<String>wrap(connection.myAddress(), "aFriend", "Yoyoyoyoyo")));
-	}
-	
-	@Test (timeout=1000)
-	public void verifyAllMessagesAreSentBeforeConnectionKilled() throws MessengerException, InterruptedException {
-		connection.send("aFriend", "Yoyoyoyoyo");
-		simluateAckToConnection();
-		connection.kill();
-		Mockito.verify(messenger).send("aFriend", codec.encode(Envelope.<String>wrap(connection.myAddress(), "aFriend", "Yoyoyoyoyo")));
+		Mockito.verify(messenger, Mockito.atLeastOnce()).send("aFriend", codec.encode(Envelope.<String>wrap(connection.myAddress(), "aFriend", "Yoyoyoyoyo")));
 	}
 
 	@Test
