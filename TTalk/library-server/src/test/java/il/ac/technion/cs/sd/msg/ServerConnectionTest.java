@@ -56,9 +56,7 @@ public class ServerConnectionTest {
 
 	@After
 	public void tearDown() throws Exception {
-		if (conn.wasStarted()) {
-			sc.kill();
-		}
+		sc.kill();
 	}
 
 	/////////////////////////////////////////////////////////////
@@ -132,13 +130,6 @@ public class ServerConnectionTest {
 	@Test (expected=IllegalArgumentException.class)
 	public void cantStartWithNullConsumer() {
 		sc.start(null);		
-	}
-	
-	@Test (expected=RuntimeException.class)
-	public void cantRestartAfterKill() {
-		sc.start(defaultBiConsumer);
-		sc.kill();
-		sc.start(defaultBiConsumer);
 	}
 	
 	@Test

@@ -55,9 +55,7 @@ public class ClientConnectionTest {
 
 	@After
 	public void tearDown() throws Exception {
-		if (conn.wasStarted()) {
-			cc.kill();
-		}
+		cc.kill();
 	}
 
 	// ///////////////////////////////////////////////////////////
@@ -123,13 +121,6 @@ public class ClientConnectionTest {
 	@Test(expected = IllegalArgumentException.class)
 	public void cantStartWithNullConsumer() {
 		cc.start(null);
-	}
-
-	@Test(expected = RuntimeException.class)
-	public void cantRestartAfterKill() {
-		cc.start(defaultConsumer);
-		cc.kill();
-		cc.start(defaultConsumer);
 	}
 
 	@Test
