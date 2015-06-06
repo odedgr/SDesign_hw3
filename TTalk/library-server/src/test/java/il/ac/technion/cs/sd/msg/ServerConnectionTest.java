@@ -46,7 +46,7 @@ public class ServerConnectionTest {
 		Mockito.doAnswer(invocation -> {
 			consumer = (Consumer<String>) invocation.getArguments()[1];
 			return m;
-		}).when(factory).start(Mockito.eq(serverAddress), Mockito.any());
+		}).when(factory).start(Mockito.eq(serverAddress), Mockito.any(Consumer.class));
 		
 		conn = new Connection<String>(serverAddress, new XStreamCodec<Envelope<String>>(), factory);
 		sc = new ServerConnection<String>(conn);

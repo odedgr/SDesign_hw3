@@ -51,7 +51,7 @@ public class ConnectionUnitTest {
 		Mockito.doAnswer(invocation -> {
 			consumer = (Consumer<String>) invocation.getArguments()[1];
 			return messenger;
-		}).when(factory).start(Mockito.eq(clientAddress), Mockito.any());
+		}).when(factory).start(Mockito.eq(clientAddress), Mockito.any(Consumer.class));
 		
 		connection = new Connection<String>(clientAddress, codec, factory);
 		connection.start(env->receivedEnvelopes.add(env));
