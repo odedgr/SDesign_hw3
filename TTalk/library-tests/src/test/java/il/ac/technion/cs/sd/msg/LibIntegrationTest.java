@@ -74,19 +74,17 @@ public class LibIntegrationTest {
 			assertEquals("one", env.content);
 			assertEquals("client1", env.from);
 		}
-		System.out.println("A");
+		
 		{
 			Envelope<String> env = serverMessages.take();
 			assertEquals("two", env.content);
 			assertEquals("client1", env.from);
 		}
-		System.out.println("B");
 		{
 			Envelope<String> env = serverMessages.take();
 			assertEquals("three", env.content);
 			assertEquals("client2", env.from);
 		}
-		System.out.println("C");
 		{
 			Envelope<String> env = serverMessages.take();
 			assertEquals("four", env.content);

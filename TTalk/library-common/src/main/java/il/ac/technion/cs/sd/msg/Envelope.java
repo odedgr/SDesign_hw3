@@ -1,6 +1,5 @@
 package il.ac.technion.cs.sd.msg;
 
-
 /**
  * Wrapper object for messages being sent, received and handled by a {@link Connection} object.
  * 
@@ -62,5 +61,36 @@ public class Envelope<Message> {
 	@Override
 	public String toString() {
 		return "from = " + this.from + " to = " + this.to + ", content = " + content.toString();
+	}
+	
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		@SuppressWarnings("unchecked")
+		Envelope<Message> other = (Envelope<Message>) obj;
+		if (from == null) {
+			if (other.from != null)
+				return false;
+		} else if (!from.equals(other.from))
+			return false;
+
+		if (to == null) {
+			if (other.to != null)
+				return false;
+		} else if (!to.equals(other.to))
+			return false;
+
+		if (content == null) {
+			if (other.content != null)
+				return false;
+		} else if (!content.equals(other.content))
+			return false;
+
+		return true;
 	}
 }
