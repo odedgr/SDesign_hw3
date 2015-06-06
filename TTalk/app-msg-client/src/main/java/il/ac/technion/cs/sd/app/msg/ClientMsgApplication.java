@@ -239,9 +239,9 @@ public class ClientMsgApplication {
 		public void visit(ExchangeList exchangeList) {
 			// Go over all messages in the list and visit them.
 			for (Exchange exchange : exchangeList.list) {
-				
 				exchange.accept(this);
 			}
+			// Login answered, release 'login' call.
 			loginResponseSemaphore.release();
 		}
     	
