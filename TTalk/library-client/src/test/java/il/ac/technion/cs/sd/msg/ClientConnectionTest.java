@@ -45,7 +45,7 @@ public class ClientConnectionTest {
 		Mockito.doAnswer(invocation -> {
 			consumer = (Consumer<String>) invocation.getArguments()[1];
 			return m;
-		}).when(factory).start(Mockito.eq(clientAddress), Mockito.any());
+		}).when(factory).start(Mockito.eq(clientAddress), Mockito.any(Consumer.class));
 
 		conn = new Connection<String>(clientAddress, new XStreamCodec<Envelope<String>>(), factory);
 		cc = new ClientConnection<String>(serverAddress, conn);
