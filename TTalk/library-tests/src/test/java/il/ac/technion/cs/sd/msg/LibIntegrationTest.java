@@ -111,7 +111,7 @@ public class LibIntegrationTest {
 		for (int i = 0; i < 5; i++) {
 			received.add(serverMessages.take());
 		}
-		System.out.println(received);
+		
 		// May be received in any order by the two clients.
 		assertTrue(received.contains(Envelope.wrap("client1","a","one")));
 		assertTrue(received.contains(Envelope.wrap("client1","a","two")));
