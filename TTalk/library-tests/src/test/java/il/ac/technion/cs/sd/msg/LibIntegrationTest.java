@@ -27,7 +27,7 @@ public class LibIntegrationTest {
 	
 	@Before
 	public void setUp() throws Exception {
-		server.start((from, msg) -> serverMessages.add(Envelope.wrap(from, "to", msg)));
+		server.start((from, msg) -> serverMessages.add(Envelope.wrap(from, "a", msg)));
 	}
 	
 	private ClientConnection<String> buildClient(String name) {
@@ -61,13 +61,12 @@ public class LibIntegrationTest {
 	@Test
 	public void ClientToServerReceivedInOrder() throws InterruptedException {
 		ClientConnection<String> client1 = buildClient("client1");
-		ClientConnection<String> client2 = buildClient("client2");
 		
 		client1.send("one");
 		client1.send("two");
-		client2.send("three");
+		client1.send("three");
 		client1.send("four");
-		client2.send("five");
+		client1.send("five");
 		
 		{
 			Envelope<String> env = serverMessages.take();
@@ -83,7 +82,7 @@ public class LibIntegrationTest {
 		{
 			Envelope<String> env = serverMessages.take();
 			assertEquals("three", env.content);
-			assertEquals("client2", env.from);
+			assertEquals("client1", env.from);
 		}
 		{
 			Envelope<String> env = serverMessages.take();
@@ -93,8 +92,32 @@ public class LibIntegrationTest {
 		{
 			Envelope<String> env = serverMessages.take();
 			assertEquals("five", env.content);
-			assertEquals("client2", env.from);
+			assertEquals("client1", env.from);
 		}
+	}
+	
+	@Test
+	public void SeveralClientsServerReceivedInOrder() throws InterruptedException {
+		ClientConnection<String> client1 = buildClient("client1");
+		ClientConnection<String> client2 = buildClient("client2");
+		
+		client1.send("one");
+		client1.send("two");
+		client2.send("three");
+		client1.send("four");
+		client2.send("five");
+		
+		List<Envelope<String>> received = new ArrayList<Envelope<String>>();
+		for (int i = 0; i < 5; i++) {
+			received.add(serverMessages.take());
+		}
+		System.out.println(received);
+		// May be received in any order by the two clients.
+		assertTrue(received.contains(Envelope.wrap("client1","a","one")));
+		assertTrue(received.contains(Envelope.wrap("client1","a","two")));
+		assertTrue(received.contains(Envelope.wrap("client2","a","three")));
+		assertTrue(received.contains(Envelope.wrap("client1","a","four")));
+		assertTrue(received.contains(Envelope.wrap("client2","a","five")));
 	}
 	
 
