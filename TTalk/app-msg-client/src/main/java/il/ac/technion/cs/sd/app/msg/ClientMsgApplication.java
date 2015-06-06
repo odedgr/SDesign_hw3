@@ -13,7 +13,6 @@ import il.ac.technion.cs.sd.msg.ClientConnection;
 
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.function.BiConsumer;
@@ -134,6 +133,9 @@ public class ClientMsgApplication {
 	 * @param what The message to send
 	 */
 	public void sendMessage(String target, String what) {
+		if (target == null || target.isEmpty() || what == null || what.isEmpty()) {
+			throw new IllegalArgumentException();
+		}
 		connection.send(new SendInstantMessageRequest(new InstantMessage(username, target, what)));
 	}
 	
@@ -146,6 +148,9 @@ public class ClientMsgApplication {
 	 * @param who The recipient of the friend request.
 	 */
 	public void requestFriendship(String who) {
+		if (who == null || who.isEmpty()) {
+			throw new IllegalArgumentException();
+		}
 		try {
 			friendRequestResponseSemaphore = new Semaphore(0);
 			connection.send(new FriendRequest(new FriendInvitation(username, who)));
@@ -164,6 +169,9 @@ public class ClientMsgApplication {
 	 *         user is a friend and is offline; an empty {@link Optional} if the user isn't a friend of the client
 	 */
 	public Optional<Boolean> isOnline(String who) {
+		if (who == null || who.isEmpty()) {
+			throw new IllegalArgumentException();
+		}
 		connection.send(new IsOnlineRequest(who));
 		try {
 			// Wait for a response which would arrive asynchronously.

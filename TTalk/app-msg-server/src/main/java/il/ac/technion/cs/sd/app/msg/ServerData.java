@@ -2,7 +2,6 @@ package il.ac.technion.cs.sd.app.msg;
 
 import il.ac.technion.cs.sd.app.msg.exchange.Exchange;
 
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;

@@ -14,8 +14,6 @@ import il.ac.technion.cs.sd.msg.ServerConnection;
 
 import java.util.Arrays;
 import java.util.Optional;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.BiConsumer;
 
 import org.junit.After;
@@ -29,11 +27,10 @@ private static final String serverAddress = "ServerAddress";
 	
 	ServerMailApplication server;
 	
-	private BlockingQueue<InstantMessage> messages = new LinkedBlockingQueue<InstantMessage>();
-	
 	BiConsumer<String, Exchange> serverConsumer;
 	ServerConnection<Exchange> connection;
 
+	@SuppressWarnings("unchecked")
 	@Before
 	public void setUp() throws Exception {
 		connection = Mockito.mock(ServerConnection.class);

@@ -38,7 +38,7 @@ public class ConnectionUnitTest {
 			}
 			
 			if (Math.random() < 0.3) {
-				Thread.sleep(connection.ACK_TIMEOUT_IN_MILLISECONDS / 2);
+				Thread.sleep(Connection.ACK_TIMEOUT_IN_MILLISECONDS / 2);
 				consumer.accept("");
 			}
 			return null;

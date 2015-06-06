@@ -2,8 +2,6 @@ package il.ac.technion.cs.sd.msg;
 
 import static org.junit.Assert.*;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -14,7 +12,7 @@ import org.junit.Test;
 public class DispatcherTest {
 	
 	private Dispatcher<String> dispatcher;
-	private BlockingQueue<String> handledStrings = new LinkedBlockingQueue();
+	private BlockingQueue<String> handledStrings = new LinkedBlockingQueue<String>();
 	
 
 	@Before
@@ -71,7 +69,7 @@ public class DispatcherTest {
 
 	@Test(expected=IllegalArgumentException.class)
 	public void checkExceptionWhenArgumentIsNull() {
-		Dispatcher<Integer> d = new Dispatcher<Integer>(null);
+		new Dispatcher<Integer>(null);
 	}
 	
 	@Test (expected = IllegalArgumentException.class)
