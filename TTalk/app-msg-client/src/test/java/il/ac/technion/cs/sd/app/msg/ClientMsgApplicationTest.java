@@ -4,6 +4,7 @@ import static org.junit.Assert.*;
 import il.ac.technion.cs.sd.app.msg.exchange.ConnectRequest;
 import il.ac.technion.cs.sd.app.msg.exchange.DisconnectRequest;
 import il.ac.technion.cs.sd.app.msg.exchange.Exchange;
+import il.ac.technion.cs.sd.app.msg.exchange.ExchangeList;
 import il.ac.technion.cs.sd.app.msg.exchange.FriendRequest;
 import il.ac.technion.cs.sd.app.msg.exchange.FriendResponse;
 import il.ac.technion.cs.sd.app.msg.exchange.IsOnlineRequest;
@@ -11,6 +12,7 @@ import il.ac.technion.cs.sd.app.msg.exchange.IsOnlineResponse;
 import il.ac.technion.cs.sd.app.msg.exchange.SendInstantMessageRequest;
 import il.ac.technion.cs.sd.msg.ClientConnection;
 
+import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -75,6 +77,10 @@ import org.mockito.Mockito;
 			return null;
 		}).when(connection).start(Mockito.any());
 		
+		Mockito.doAnswer(invocation -> {
+			clientConsumer.accept(new ExchangeList(Collections.emptyList()));
+			return null;
+		}).when(connection).send(new ConnectRequest());
 		client.login(messageConsumer, friendshipRequestHandler, friendshipReplyConsumer);
 		
 		Mockito.verify(connection).start(Mockito.any());
@@ -87,10 +93,7 @@ import org.mockito.Mockito;
 	
 	@Test
 	public void connectRequestSent() throws InterruptedException {
-		client.login(im -> {}, s -> true, (x, y) -> {});
-		Mockito.verify(connection).start(Mockito.any());
-		Mockito.verify(connection).send(new ConnectRequest());
-		
+		loginClient(im -> {}, s -> true, (x, y) -> {});
 		client.logout();
 		Mockito.verify(connection).send(new DisconnectRequest());
 		Mockito.verify(connection).stop();
@@ -98,11 +101,15 @@ import org.mockito.Mockito;
 	
 	@Test
 	public void severalConnectAndDisconnects() throws InterruptedException {
-		client.login(im -> {
-		}, s -> true, (x, y) -> {
-		});
-		Mockito.verify(connection, Mockito.atLeastOnce()).start(Mockito.any());
-		Mockito.verify(connection, Mockito.atLeastOnce()).send(new ConnectRequest());
+		loginClient(im -> {}, s -> true, (x, y) -> {});
+
+		client.logout();
+		Mockito.verify(connection, Mockito.atLeastOnce()).send(new DisconnectRequest());
+		Mockito.verify(connection, Mockito.atLeastOnce()).stop();
+		
+		client.login(im -> {}, s -> true, (x, y) -> {});
+		Mockito.verify(connection, Mockito.atLeast(2)).start(Mockito.any());
+		Mockito.verify(connection, Mockito.atLeast(2)).send(new ConnectRequest());
 
 		client.logout();
 		Mockito.verify(connection, Mockito.atLeastOnce()).send(new DisconnectRequest());
@@ -126,8 +133,8 @@ import org.mockito.Mockito;
 	public void friendReplyReceived() throws InterruptedException {
 		loginClient(im -> {}, s -> true, (x, y) -> replies.add(new FriendshipReply(x, y)));
 		
-		sendToClient(new FriendResponse(new FriendInvitation(clientAddress, "friendlie"), true));
-		sendToClient(new FriendResponse(new FriendInvitation(clientAddress, "enemie"), false));
+		sendToClient(new FriendResponse(new FriendInvitation(clientAddress, "friendlie"), Optional.of(true)));
+		sendToClient(new FriendResponse(new FriendInvitation(clientAddress, "enemie"), Optional.of(false)));
 		
 		assertEquals(new FriendshipReply("friendlie", true), replies.take());
 		assertEquals(new FriendshipReply("enemie", false), replies.take());
@@ -141,10 +148,9 @@ import org.mockito.Mockito;
 		FriendInvitation invite2 = new FriendInvitation("Aaron", clientAddress);
 
 		sendToClient(new FriendRequest(invite1));
-		Mockito.verify(connection).send(new FriendResponse(invite1, false));
-
+		Mockito.verify(connection).send(new FriendResponse(invite1, Optional.of(false)));
 		sendToClient(new FriendRequest(invite2));
-		Mockito.verify(connection).send(new FriendResponse(invite2, true));
+		Mockito.verify(connection).send(new FriendResponse(invite2, Optional.of(true)));
 	}
 	
 	@Test

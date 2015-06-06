@@ -9,6 +9,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class IntegrationTestInstantMessages {
@@ -48,6 +49,21 @@ public class IntegrationTestInstantMessages {
 		
 		client1.stop();
 		client2.stop();
+	}
+
+	@Test
+	public void messagesToSelf() throws Exception {
+		
+		ClientMsgApplication client1 = buildClient("Moshe");
+		
+		client1.sendMessage("Moshe", "Yoohoo");
+		client1.sendMessage("Moshe", "Yahoo");
+		client1.sendMessage("Moshe", "Yeehoo");
+		assertEquals(new InstantMessage("Moshe", "Moshe", "Yoohoo"), messages.get("Moshe").take());
+		assertEquals(new InstantMessage("Moshe", "Moshe", "Yahoo"), messages.get("Moshe").take());
+		assertEquals(new InstantMessage("Moshe", "Moshe", "Yeehoo"), messages.get("Moshe").take());
+		
+		client1.stop();
 	}
 	
 	@Test

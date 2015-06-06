@@ -128,12 +128,13 @@ public class ServerMailApplication {
 	 * If not, adds the exchange to the client pending messages queue.
 	 * @param exchange the request/response to send.
 	 */
-	private void sendIfOnline(String client, Exchange exchange) {
+	private boolean sendIfOnline(String client, Exchange exchange) {
 		if (data.isConnected(client)) {
 			connection.send(client, exchange);
-		} else {
-			data.addPendingClientMessage(client, exchange);
+			return true;
 		}
+		data.addPendingClientMessage(client, exchange);
+		return false;
 	}
 	
 	private class Visitor implements ExchangeVisitor {
@@ -148,9 +149,7 @@ public class ServerMailApplication {
 		public void visit(ConnectRequest request) {
 			data.connect(client);
 			List<Exchange> pendingMessages = data.getAndClearPendingClientMessages(client);
-			if (!pendingMessages.isEmpty()) {
-				connection.send(client, new ExchangeList(pendingMessages));
-			}
+			connection.send(client, new ExchangeList(pendingMessages));
 		}
 
 		@Override
@@ -160,7 +159,6 @@ public class ServerMailApplication {
 
 		@Override
 		public void visit(SendInstantMessageRequest request) {
-			// TODO: remove before submission?
 			if (request.message.from != client) {
 				throw new UnsupportedOperationException("A client attempts to send a message by a different name.");
 			}
@@ -170,21 +168,24 @@ public class ServerMailApplication {
 
 		@Override
 		public void visit(FriendRequest request) {
-			// TODO: remove before submission?
 			if (!request.invitation.from.equals(client)) {
 				throw new UnsupportedOperationException("A client attempts to send a friend request by a different name.");
 			}
-			sendIfOnline(request.invitation.to, request);
+			if (!sendIfOnline(request.invitation.to, request)) {
+				sendIfOnline(client, new FriendResponse(request.invitation, Optional.empty()));
+			}
 		}
 
 		@Override
 		public void visit(FriendResponse response) {
-			// TODO: remove before submission?
 			if (response.invitation.to != client) {
 				throw new UnsupportedOperationException("A client attempts to answer a friend request by a different name.");
 			}
+			if (!response.isAccepted.isPresent()) {
+				throw new UnsupportedOperationException("A client must not return an empty friend response.");
+			}
 			
-			if (response.isAccepted) {
+			if (response.isAccepted.get()) {
 				data.addFriendship(response.invitation.from, response.invitation.to);
 			}
 			

@@ -22,7 +22,7 @@ import java.util.function.Consumer;
  * <br>...
  * <br>conn.start(x -> handleMessage_2(x));
  * <br>...
- * <br>conn.kill();
+ * <br>conn.stop();
  * </code><br><br>
  * 
  * where handleMessage() has a signature of:<br>
@@ -35,14 +35,25 @@ import java.util.function.Consumer;
  */
 public class Connection<Message> {
 	
-	public static final long ACK_TIMEOUT_IN_MILLISECONDS = 50L; // time to wait for an ACK before re-sending
+	static class EnvelopeWithSemaphore<Message> {
+		public final Semaphore sem;
+		public final Envelope<Message> env;
+
+		public EnvelopeWithSemaphore(Envelope<Message> env, Semaphore sem) {
+			this.env = env;
+			this.sem = sem;
+		}
+	}
+	
+	public static final long ACK_TIMEOUT_IN_MILLISECONDS = 25L; // time to wait for an ACK before re-sending
 
 	// CONSTANTS
 	private static final String ACK = "";
 	
 	// INSTANCE VARIABLES
-	private Dispatcher<Envelope<Message>> receiver; // thread taking each incoming message from queue and dispatching a handler
-	private Dispatcher<Envelope<Message>> sender; // thread in charge of sending outgoing messages from queue
+	private Dispatcher<Envelope<Message>> receiver; // thread taking each incoming message from queue and dispatching a handler.
+	private Dispatcher<EnvelopeWithSemaphore<Message>> sender; // thread taking each outgoing message from queue and dispatching a handler.
+	
 	private Messenger messenger = null;
 	
 	private final Codec<Envelope<Message>> codec;
@@ -74,7 +85,6 @@ public class Connection<Message> {
 		this.codec = codec;
 	}
 	
-	
 	/**
 	 * Constructor. Creates a connection for accepting and handling incoming messages as well as sending back outgoing replies, 
 	 * using a custom {@link Codec} to encode/decode messages into the set Message type of the connection, and the default MessengerFactory.<br>
@@ -96,7 +106,7 @@ public class Connection<Message> {
 	 * @param myAddress - This connection's address.
 	 */
 	public Connection(String myAddress) {
-		this(myAddress, new XStreamCodec<>(), new MessengerFactory());
+		this(myAddress, new XStreamCodec<>());
 	}
 	
 	/**
@@ -123,10 +133,16 @@ public class Connection<Message> {
 		if (ACK.equals(message)) { // send an ACK - no need to wait for incoming ACK in return
 			throw new UnsupportedOperationException("don't use send() to send empty messages.");
 		}
-		safeSend(Envelope.wrap(myAddress, to, message));
 		
-		
-//		this.sender.enqueue(Envelope.wrap(myAddress, to, message));
+		Envelope<Message> env = Envelope.wrap(myAddress, to, message);
+		Semaphore sem = new Semaphore(0);
+		sender.enqueue(new EnvelopeWithSemaphore<Message>(env, sem));
+		try {
+			sem.acquire();
+		} catch (InterruptedException e) {
+			// Should not be interrupted.
+			throw new RuntimeException(e);
+		}
 	}
 	
 	
@@ -137,22 +153,22 @@ public class Connection<Message> {
 	 * 
 	 * @param env - Envelope to be sent.
 	 */
-	private void safeSend(Envelope<Message> env) {
+	private void safeSend(EnvelopeWithSemaphore<Message> ews) {
+		Envelope<Message> env = ews.env;
 		this.ackNotifier = new Semaphore(0);
 		while (true) {
-			System.out.println("Trying to send: " + env);
 			try {
 				this.messenger.send(env.to, this.codec.encode(env));
-				if (this.ackNotifier.tryAcquire(ACK_TIMEOUT_IN_MILLISECONDS, TimeUnit.MILLISECONDS)) {
-					System.out.println("succeeded!");
+				if (this.ackNotifier.tryAcquire(ACK_TIMEOUT_IN_MILLISECONDS,TimeUnit.MILLISECONDS)) {
+					// Ack received, quit trying. 
 					break;
-				} else {
-					System.out.println("timeout.");
 				}
+				// Ack not received until timeout, try again.
 			} catch (InterruptedException | MessengerException e) {
 				throw new RuntimeException(e);
 			}
 		}
+		ews.sem.release();
 	}
 
 	
@@ -187,7 +203,6 @@ public class Connection<Message> {
 			return;
 		}
 		Envelope<Message> env = codec.decode(inMsg);
-		// Send an ack to the sender.
 		sendAck(env.from);
 		this.receiver.enqueue(env);
 	}
@@ -220,13 +235,10 @@ public class Connection<Message> {
 		if (messenger != null) { // already started - ignoring call
 			return;
 		}
-
-		// Start sender and receiver.
-		sender = new Dispatcher<Envelope<Message>>(x -> safeSend(x));
-		sender.start();
-		
 		receiver = new Dispatcher<Envelope<Message>>(x -> handler.accept(x));
+		sender = new Dispatcher<EnvelopeWithSemaphore<Message>>(x -> safeSend(x));
 		receiver.start();
+		sender.start();
 		
 		try {
 			messenger = messengerFactory.start(myAddress, x -> receiveIncomingMessage(x));
@@ -243,14 +255,14 @@ public class Connection<Message> {
 	 * <br>
 	 * If the Connection was already stopped upon invocation, this does nothing.
 	 */
-	synchronized public void stop() {
+	public void stop() {
 		if (messenger == null) {
 			// Already stopped; Do nothing.
 			return;
 		}
 		
-		sender.stop();
 		receiver.stop();
+		sender.stop();
 		
 		try {
 			this.messenger.kill();

@@ -1,5 +1,7 @@
 package il.ac.technion.cs.sd.app.msg.exchange;
 
+import java.util.Optional;
+
 import il.ac.technion.cs.sd.app.msg.ExchangeVisitor;
 import il.ac.technion.cs.sd.app.msg.FriendInvitation;
 
@@ -15,14 +17,14 @@ public class FriendResponse implements Exchange {
 	/**
 	 * The response (if there is any).
 	 */
-	final public boolean isAccepted;
+	final public Optional<Boolean> isAccepted;
 
 	/**
 	 * Create a new FriendResponse.
 	 * @param invitation the invitation that is responded.
 	 * @param isAccepted the response to the invitation.
 	 */
-	public FriendResponse(FriendInvitation invitation, boolean isAccepted) {
+	public FriendResponse(FriendInvitation invitation, Optional<Boolean> isAccepted) {
 		this.invitation = invitation;
 		this.isAccepted = isAccepted;
 	}
@@ -46,6 +48,12 @@ public class FriendResponse implements Exchange {
 				return false;
 		} else if (!invitation.equals(other.invitation))
 			return false;
-		return isAccepted == other.isAccepted;
+		if (isAccepted == null) {
+			if (other.isAccepted != null)
+				return false;
+		} else if (!isAccepted.equals(other.isAccepted))
+			return false;
+		
+		return true;
 	}
 }

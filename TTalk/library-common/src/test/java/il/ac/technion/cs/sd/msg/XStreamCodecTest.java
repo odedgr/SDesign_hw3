@@ -33,8 +33,6 @@ public class XStreamCodecTest {
 		String xml = codec.encode(a);
 		AuxBase $ = codec.decode(xml);
 		
-		System.out.println(xml);
-		
 		assertEquals(a.s, $.s);
 		assertEquals(a.b, $.b);
 		assertEquals(a.c, $.c, 0.0001);

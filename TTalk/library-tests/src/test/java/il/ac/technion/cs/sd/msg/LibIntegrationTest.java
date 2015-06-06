@@ -35,7 +35,7 @@ public class LibIntegrationTest {
 		clients.add(client);
 		clientMessages.put(name, new LinkedBlockingQueue<String>());
 		
-		client.start(msg -> { System.out.println("Add to " + name); clientMessages.get(name).add(msg); });
+		client.start(msg -> clientMessages.get(name).add(msg));
 		return client;
 	}
 

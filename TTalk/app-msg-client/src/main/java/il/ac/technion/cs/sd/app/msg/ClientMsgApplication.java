@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -30,6 +31,8 @@ public class ClientMsgApplication {
 	ClientConnection<Exchange> connection;
 	
 	BlockingQueue<Optional<Boolean>> isOnlineResponseQueue;
+	Semaphore friendRequestResponseSemaphore;
+	Semaphore loginResponseSemaphore;
 	
 	Consumer<InstantMessage> messageConsumer;
 	Function<String, Boolean> friendshipRequestHandler;
@@ -77,6 +80,8 @@ public class ClientMsgApplication {
 		this.username = username;
 		this.connection = connection;
 		this.isOnlineResponseQueue = new LinkedBlockingQueue<Optional<Boolean>>();
+		this.friendRequestResponseSemaphore = new Semaphore(0);
+		this.loginResponseSemaphore = new Semaphore(0);
 	}
 	
 	/**
@@ -99,10 +104,18 @@ public class ClientMsgApplication {
 		
 		connection.start(message -> message.accept(new Visitor()));
 		
-		connection.send(new ConnectRequest());
 		this.messageConsumer = messageConsumer;
 		this.friendshipRequestHandler = friendshipRequestHandler;
 		this.friendshipReplyConsumer = friendshipReplyConsumer;
+
+		loginResponseSemaphore = new Semaphore(0);
+		connection.send(new ConnectRequest());
+		try {
+			// Wait until login is responded and all pending messages handled.
+			loginResponseSemaphore.acquire();
+		} catch (InterruptedException e) {
+			throw new RuntimeException(e);
+		}
 	}
 	
 	/**
@@ -133,7 +146,14 @@ public class ClientMsgApplication {
 	 * @param who The recipient of the friend request.
 	 */
 	public void requestFriendship(String who) {
-		connection.send(new FriendRequest(new FriendInvitation(username, who)));
+		try {
+			friendRequestResponseSemaphore = new Semaphore(0);
+			connection.send(new FriendRequest(new FriendInvitation(username, who)));
+			// Wait for a response which would arrive asynchronously.
+			friendRequestResponseSemaphore.acquire();
+		} catch (InterruptedException e) {
+			throw new RuntimeException(e);
+		}
 	}
 	
 	/**
@@ -183,12 +203,17 @@ public class ClientMsgApplication {
 		@Override
 		public void visit(FriendRequest request) {
 			boolean answer = friendshipRequestHandler.apply(request.invitation.from);
-			connection.send(new FriendResponse(request.invitation, answer));
+			connection.send(new FriendResponse(request.invitation, Optional.of(answer)));
 		}
 
 		@Override
 		public void visit(FriendResponse response) {
-			friendshipReplyConsumer.accept(response.invitation.to, response.isAccepted);
+			if (response.isAccepted.isPresent()) {
+				// Accept resoinse only if present.
+				friendshipReplyConsumer.accept(response.invitation.to, response.isAccepted.get());
+			}
+			// Request answered, release send call.
+			friendRequestResponseSemaphore.release();
 		}
 
 		@Override
@@ -198,20 +223,18 @@ public class ClientMsgApplication {
 
 		@Override
 		public void visit(IsOnlineResponse response) {
-			try {
-				// Answer and notify isOnline method to return an answer.
-				isOnlineResponseQueue.put(response.answer);
-			} catch (InterruptedException e) {
-				throw new RuntimeException(e);
-			}
+			// Answer and notify isOnline method to return an answer.
+			isOnlineResponseQueue.add(response.answer);
 		}
 
 		@Override
 		public void visit(ExchangeList exchangeList) {
 			// Go over all messages in the list and visit them.
 			for (Exchange exchange : exchangeList.list) {
+				
 				exchange.accept(this);
 			}
+			loginResponseSemaphore.release();
 		}
     	
     }

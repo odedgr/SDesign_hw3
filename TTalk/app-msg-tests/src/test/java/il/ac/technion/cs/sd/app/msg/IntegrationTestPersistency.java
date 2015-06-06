@@ -9,9 +9,10 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
-public class IntegrationTestPendingMessages {
+public class IntegrationTestPersistency {
 	
 	static class FriendshipReply {
 		public final String name;
@@ -48,6 +49,17 @@ public class IntegrationTestPendingMessages {
 				(x, y) -> replies.get(name).add(new FriendshipReply(x, y)));
 	}
 	
+	private void restartServer() throws InterruptedException {
+		server.stop();
+		server.start();
+	}
+	
+	private void cleanServer() {
+		server.stop();
+		server.clean();
+		server.start();
+	}
+	
 	@Before
 	public void setp() {
 		server.start(); // non-blocking
@@ -67,10 +79,11 @@ public class IntegrationTestPendingMessages {
 		loginClient(client1, "Alice");
 		client1.sendMessage("Bob", "Hi!");
 		client1.sendMessage("Bob", "How are you?");
-		
+		restartServer();
 		// No messages arrived to bob before he logged in.
 		assertTrue(messages.get("Bob").isEmpty());
 		
+		restartServer();
 		loginClient(client2, "Bob");
 		// Now all bob's messages arrive.
 		assertEquals(new InstantMessage("Alice", "Bob", "Hi!"), messages.get("Bob").take());
@@ -86,15 +99,22 @@ public class IntegrationTestPendingMessages {
 		ClientMsgApplication client2 = buildClient("Bob");
 		
 		loginClient(client1, "Alice");
+		restartServer();
 		client1.requestFriendship("Bob");
+		restartServer();
 		
 		// They are not friends yet, so isOnline returns an empty optional.
 		assertFalse(client1.isOnline("Bob").isPresent());
+		restartServer();
 		
 		loginClient(client2, "Bob");
+		restartServer();
 		// Now when bob logged in, then the friend request arrived and processed,
 		// so they are friends and both online, so isOnline returns true. 
+		assertTrue(client1.isOnline("Bob").isPresent());
 		assertTrue(client1.isOnline("Bob").get());
+		
+		restartServer();
 		
 		client1.stop();
 		client2.stop();
@@ -104,6 +124,8 @@ public class IntegrationTestPendingMessages {
 	public void friendResponseArriveAfterLogin() throws InterruptedException {
 		ClientMsgApplication client1 = buildClient("Alice");
 		ClientMsgApplication client2 = buildClient("Bob");
+		
+		restartServer();
 		
 		// Alice sends a friend request and logs out before bob logged in.
 		loginClient(client1, "Alice");
@@ -117,12 +139,60 @@ public class IntegrationTestPendingMessages {
 		client1.logout();
 		assertTrue(replies.get("Alice").isEmpty());
 		
+		restartServer();
+		
 		loginClient(client2, "Bob");
 		// Still no response, because alice did not log in to get the reply (which waits at the server at this point).
 		assertTrue(replies.get("Alice").isEmpty());
+		restartServer();
 		
 		loginClient(client1, "Alice");
+		restartServer();
 		assertEquals(new FriendshipReply("Bob", true), replies.get("Alice").take());
+		
+		restartServer();
+		
+		client1.stop();		
+		client2.stop();
+	}
+	
+	@Test
+	public void pendingMessagesCleared() throws InterruptedException {
+		ClientMsgApplication client1 = buildClient("Alice");
+		ClientMsgApplication client2 = buildClient("Bob");
+		loginClient(client1, "Alice");
+		client1.sendMessage("Bob", "Hi!");
+		client1.sendMessage("Bob", "How are you?");
+
+		// No messages arrived to bob before he logged in.
+		assertTrue(messages.get("Bob").isEmpty());
+		
+		cleanServer();
+
+		loginClient(client2, "Bob");
+		// Still no messages for bob since data was cleared.
+		assertTrue(messages.get("Bob").isEmpty());
+
+		client1.stop();
+		client2.stop();
+	}
+	
+	@Test
+	public void friendshipDataCleared() {
+		ClientMsgApplication client1 = buildClient("Alice");
+		ClientMsgApplication client2 = buildClient("Bob");
+		
+		loginClient(client1, "Alice");
+		loginClient(client2, "Bob");
+		client1.requestFriendship("Bob");
+		
+		assertTrue(client1.isOnline("Bob").get());
+		
+		cleanServer();
+		loginClient(client1, "Alice");
+		loginClient(client2, "Bob");
+		
+		assertFalse(client1.isOnline("Bob").isPresent());
 		
 		client1.stop();		
 		client2.stop();

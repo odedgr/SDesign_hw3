@@ -165,7 +165,7 @@ public class ServerConnection<Message> {
 	 * </p>
 	 */
 	public void kill() {
-		conn.stop(); // connection state validation is done inside this.conn
+		this.conn.stop(); // connection state validation is done inside this.conn
 	}
 	
 	

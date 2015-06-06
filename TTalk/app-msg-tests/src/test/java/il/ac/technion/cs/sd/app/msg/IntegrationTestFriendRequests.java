@@ -10,6 +10,7 @@ import java.util.function.Function;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class IntegrationTestFriendRequests {
@@ -83,14 +84,13 @@ public class IntegrationTestFriendRequests {
 		client3.requestFriendship("MadMax");
 		client4.requestFriendship("MadMax");
 		
-		assertEquals(new FriendshipReply("HappyHarry", true), replies.get("MadMax").take());
-		assertEquals(new FriendshipReply("HappyBarry", true), replies.get("MadMax").take());
-		assertEquals(new FriendshipReply("SadLarry", false), replies.get("MadMax").take());
+		assertEquals(new FriendshipReply("MadMax", true), replies.get("HappyHarry").take());
+		assertEquals(new FriendshipReply("MadMax", true), replies.get("HappyBarry").take());
+		assertEquals(new FriendshipReply("MadMax", false), replies.get("SadLarry").take());
 		
 		client1.stop();
 		client2.stop();
 		client3.stop();
 		client4.stop();
 	}
-
 }

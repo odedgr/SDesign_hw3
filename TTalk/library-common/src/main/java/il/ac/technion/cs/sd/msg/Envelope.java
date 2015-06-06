@@ -60,7 +60,7 @@ public class Envelope<Message> {
 	
 	@Override
 	public String toString() {
-		return "from = " + this.from + " to = " + this.to + ", content = " + content.toString();
+		return "from = " + this.from + ", to = " + this.to + ", content = " + content.toString();
 	}
 	
 	@Override

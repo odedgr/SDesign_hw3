@@ -50,7 +50,7 @@ public class ExchangeTest {
 	
 	@Test
 	public void testFriendResponse() {
-		Exchange response = new FriendResponse(new FriendInvitation("me", "you"), true);
+		Exchange response = new FriendResponse(new FriendInvitation("me", "you"), Optional.of(true));
 		ExchangeVisitor visitor = Mockito.mock(ExchangeVisitor.class);
 		response.accept(visitor);
 		Mockito.verify(visitor).visit((FriendResponse)response);

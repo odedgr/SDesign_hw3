@@ -82,7 +82,6 @@ private static final String serverAddress = "ServerAddress";
 		sendToServer("aClient", request2);
 		Mockito.verify(connection, Mockito.never()).send(Mockito.anyString(), Mockito.any());
 		sendToServer("aTarget", new ConnectRequest());
-		Thread.sleep(100);
 		Mockito.verify(connection).send("aTarget", new ExchangeList(Arrays.asList(request1, request2)));
 	}
 	
@@ -99,7 +98,7 @@ private static final String serverAddress = "ServerAddress";
 	public void friendResponsePassed() {
 		sendToServer("aClient", new ConnectRequest());
 		sendToServer("aFriend", new ConnectRequest());
-		Exchange response = new FriendResponse(new FriendInvitation("aClient", "aFriend"), true);
+		Exchange response = new FriendResponse(new FriendInvitation("aClient", "aFriend"), Optional.of(true));
 		sendToServer("aFriend", response);
 		Mockito.verify(connection).send("aClient", response);
 	}
@@ -117,7 +116,7 @@ private static final String serverAddress = "ServerAddress";
 		sendToServer("aClient", new ConnectRequest());
 		sendToServer("aFriend", new ConnectRequest());
 		// Make clients friends.
-		Exchange response = new FriendResponse(new FriendInvitation("aClient", "aFriend"), true);
+		Exchange response = new FriendResponse(new FriendInvitation("aClient", "aFriend"), Optional.of(true));
 		sendToServer("aFriend", response);
 		Mockito.verify(connection).send("aClient", response);
 		
@@ -143,7 +142,6 @@ private static final String serverAddress = "ServerAddress";
 		
 		
 		sendToServer("aTarget", new ConnectRequest());
-		Thread.sleep(100);
 		Mockito.verify(connection).send("aTarget", new ExchangeList(Arrays.asList(request1, request2)));
 	}
 
@@ -161,7 +159,7 @@ private static final String serverAddress = "ServerAddress";
 		
 		sendToServer("aTarget", new ConnectRequest());
 		Thread.sleep(100);
-		Mockito.verify(connection, Mockito.never()).send(Mockito.anyString(), Mockito.any());
+		Mockito.verify(connection).send("aTarget", new ExchangeList(Arrays.asList()));
 	}
 
 }
