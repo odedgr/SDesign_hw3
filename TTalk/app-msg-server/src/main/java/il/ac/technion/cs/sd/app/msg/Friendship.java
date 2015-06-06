@@ -11,6 +11,8 @@ public class Friendship {
 
 	/**
 	 * Create a new friendship object. The order of the parameters is not important.
+	 * <br/>
+	 * For example, <code>new Friendship("a", "b").equals(new Friendhsip("b", "a"))</code> returns true. 
 	 * @param friend1 a name of one friend in this friendship.
 	 * @param friend2 a name of another friend in this friendship.
 	 */

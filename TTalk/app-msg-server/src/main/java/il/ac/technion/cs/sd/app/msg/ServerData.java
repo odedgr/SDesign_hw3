@@ -11,10 +11,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class ServerData implements Serializable {
-
-	private static final long serialVersionUID = 8246218123636348066L;
-	
+/**
+ * A class which encapsulates all server related data: online users, friendships and user pending messages.  
+ */
+public class ServerData {
 	private Set<String> online = Collections.synchronizedSet(new HashSet<String>());
 	private Set<Friendship> friendships = Collections.synchronizedSet(new HashSet<Friendship>());
 	

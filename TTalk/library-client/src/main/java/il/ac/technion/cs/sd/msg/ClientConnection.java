@@ -22,7 +22,7 @@ import java.util.function.Consumer;
  * 
  * <p>
  * where handle is a {@link Consumer}&lt;Message&gt;.<br>
- * i.e: handle = <code>(x) -> doSomething(x)</code>
+ * i.e: <code>handle = (x) -> doSomething(x)</code>
  * </p>
  * <p>
  * e.g:<code> new ClientConnection("client", (x) -> doSomething(x)); </code>
