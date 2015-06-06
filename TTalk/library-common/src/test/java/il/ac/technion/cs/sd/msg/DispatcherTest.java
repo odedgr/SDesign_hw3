@@ -1,195 +1,87 @@
 package il.ac.technion.cs.sd.msg;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Random;
-import java.util.function.Consumer;
-import java.util.stream.Collectors;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-
 public class DispatcherTest {
+	
+	private Dispatcher<String> dispatcher;
+	private BlockingQueue<String> handledStrings = new LinkedBlockingQueue();
+	
 
-	private static final Envelope<Object> dummyEnvelope = Envelope.wrap("tester", "dummy envelope", new Object());
-	List<Dispatcher<Object>> dispatchers = new ArrayList<Dispatcher<Object>>();
-	
-	@SuppressWarnings("unchecked")
-	private <T> Dispatcher<T> buildDispatcher(Consumer<Envelope<T>> c) {
-		Dispatcher<T> disp = new Dispatcher<T>();
-		disp.setHandler(c);
-		dispatchers.add((Dispatcher<Object>) disp);
-		return disp;
-	}
-	
-	private void stubHandler(Envelope<Object> x) {
-		System.out.println("stub-handled object envelope " + x.toString());
-	}
-	
-	public void blockHandler(Envelope<Object> env, long sleepTime) {
-		try {
-			Thread.sleep(sleepTime);
-		} catch (InterruptedException e) {
-			System.out.println("block handler interrupted");
-		}
-	}
-	
 	@Before
 	public void setUp() throws Exception {
+		dispatcher = new Dispatcher<String>(s -> handledStrings.add(s));
+		dispatcher.start();
 	}
 
 	@After
 	public void tearDown() throws Exception {
-		for (Dispatcher<Object> d : dispatchers) {
-			if (d.isActive()) {
-				d.kill();
-			}
-		}
+		dispatcher.stop();
 	}
 
+	@Test
+	public void OneMessageArrives() throws InterruptedException {
+		dispatcher.enqueue("One");
+		assertEquals("One", handledStrings.take());
+	}
+	
+	@Test
+	public void MultipleMessagesArrive() throws InterruptedException {
+		dispatcher.enqueue("One");
+		dispatcher.enqueue("Two");
+		dispatcher.enqueue("Three");
+		assertEquals("One", handledStrings.take());
+		assertEquals("Two", handledStrings.take());
+		assertEquals("Three", handledStrings.take());
+	}
+
+	@Test
+	public void testQueued() throws InterruptedException {
+		// Replace dispatcher with a new dispatcher with inherent delay.
+		dispatcher.stop();
+		dispatcher = new Dispatcher<String>(s -> {
+			try {
+				Thread.sleep(100);
+				handledStrings.add(s);
+			} catch (Exception e) {}
+		});
+		dispatcher.start();
+		
+		dispatcher.enqueue("second");  // Because this dispatcher is delayed, 'first' should overtake 'second'.
+		handledStrings.add("first");
+		
+		dispatcher.enqueue("third");
+		dispatcher.stop();  // stop method should not return until queue is empty, i.e. third is sent.
+		handledStrings.add("fourth"); // ...so fourth would not overcome third.
+		
+		assertEquals("first", handledStrings.take());
+		assertEquals("second", handledStrings.take());
+		assertEquals("third", handledStrings.take());
+		assertEquals("fourth", handledStrings.take());
+	}
+
+	@Test(expected=IllegalArgumentException.class)
+	public void checkExceptionWhenArgumentIsNull() {
+		Dispatcher<Integer> d = new Dispatcher<Integer>(null);
+	}
+	
 	@Test (expected = IllegalArgumentException.class)
-	public void cantCreateDispatcherWithNullQueue() {
-		new Dispatcher<>(null);
+	public void cannotEnququqNullElement() throws InterruptedException {
+		dispatcher.enqueue(null);
 	}
-
-	@Test (expected = IllegalArgumentException.class)
-	public void cantEnqueueNullEnvelope() throws InterruptedException {
-		Dispatcher<Object> d = buildDispatcher(x -> stubHandler(x));
-		d.enqueue(null);
-	}
-
+	
 	@Test (expected = RuntimeException.class)
-	public void cantEnqueueAfterDispatcherKilled() throws InterruptedException {
-		Dispatcher<Object> disp = buildDispatcher(x -> stubHandler(x));
-		disp.startMe();
-		disp.kill();
-		
-		Thread.sleep(5L);
-		
-		disp.enqueue(dummyEnvelope); // should throw the exception
+	public void cannotEnqueueWhenDispatcherIsStopped() throws InterruptedException {
+		dispatcher.stop();
+		dispatcher.enqueue("Karamba!");
 	}
-
-	// TODO canEnqueueBeforeStart
-	// TODO canEnqueueWhilePaused
-	
-	@Test
-	public void allUnhandledJobsAreReturned() throws InterruptedException {
-		Dispatcher<Object> disp = buildDispatcher(x -> stubHandler(x));
-		
-		List<Integer> jobs = Arrays.asList(1, 2, 3, 4);
-		List<Envelope<Object>> jobsInEnvelopes = new ArrayList<>();
-		
-		for (Integer i : jobs) {
-			Envelope<Object> env = Envelope.wrap("tester", i.toString(), i);
-			jobsInEnvelopes.add(env);
-			disp.enqueue(env);
-		}
-		
-		assertEquals(jobsInEnvelopes, disp.getUnhandled());
-	}
-	
-	@Test
-	public void jobsAreHandledByOrderOfInsertion() throws InterruptedException {
-		List<Integer> jobs = Arrays.asList(1, 2, 3, 4);
-		List<Envelope<Object>> jobsInEnvelopes = new ArrayList<>();
-		List<Integer> handledJobs = new ArrayList<Integer>();
-		
-		Dispatcher<Object> disp = buildDispatcher(x -> handledJobs.add((Integer)x.content));
-		disp.startMe();
-
-		for (Integer i : jobs) {
-			Envelope<Object> env = Envelope.wrap("tester", i.toString(), i);
-			jobsInEnvelopes.add(env);
-			disp.enqueue(env);
-		}
-
-		disp.waitUntilEmptyOrTimeout(50L);
-		
-		assertEquals(jobs, handledJobs);
-	}
-	
-	@Test
-	public void onlyUnhandledJobsReturned() throws InterruptedException {
-		
-		final long BLOCK_TIME = 20L;
-		
-		List<Integer> jobs = Arrays.asList(1, 2, 3, 4);
-		List<Envelope<Object>> jobsInEnvelopes = new ArrayList<>();
-		List<Integer> unhandledJobs = new ArrayList<Integer>(jobs);
-		
-		Dispatcher<Object> disp = buildDispatcher(x -> { unhandledJobs.remove(x.content); blockHandler(x, BLOCK_TIME); });
-		disp.startMe();
-
-		for (Integer i : jobs) {
-			Envelope<Object> env = Envelope.wrap("tester", i.toString(), i);
-			jobsInEnvelopes.add(env);
-			disp.enqueue(env);
-		}
-		
-		Thread.sleep((long)(BLOCK_TIME * 1.5)); // allow for a single job to be handled
-		disp.pause();
-		
-		assertEquals(unhandledJobs, disp.getUnhandled().stream().map(x -> x.content).collect(Collectors.toList()));
-	}
-	
-
-	static class Producer extends Thread {
-		private int id;
-		private Dispatcher<Object> disp;
-		
-		public Producer(int id, Dispatcher<Object> disp) {
-			this.id = id;
-			this.disp = disp;
-		}
-		
-		@Override
-		public void run() {
-			for (int j = 0; j < 10; ++j) {
-				try {
-					this.disp.enqueue(Envelope.wrap("tester", Integer.toString(id), j));
-					if (0 == System.nanoTime() % 2) {
-						Random rand = new Random();
-						int randNum = rand.nextInt(5000);
-						Thread.sleep(randNum / 1000, randNum % 1000);
-					}
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
-			}			
-		}
-		
-	}
-	
-	@Test
-	public void jobHandledInOrderMultithreadedOffline() throws InterruptedException {
-		List<Integer> handledJobs = new ArrayList<Integer>();
-		Dispatcher<Object> disp = buildDispatcher(x -> handledJobs.add((Integer) x.content));
-		List<Thread> producers = new ArrayList<Thread>();
-
-		for (int i = 0; i < 5; ++i) {
-			producers.add(new Producer(i, disp));
-		}
-		
-		for (Thread p : producers) { p.start(); }
-		for (Thread p : producers) { p.join(); }
-		
-		disp.startMe();
-		List<Integer> dispInitJobs = disp.getUnhandled()
-				.stream()
-				.map(x -> (Integer)x.content)
-				.collect(Collectors.toList());
-		
-		disp.waitUntilEmptyOrTimeout(50L);
-		
-		assertEquals(dispInitJobs, handledJobs);
-	}
-	
-	
-	// TODO pausing & resuming & starting & killing
-	
 }
