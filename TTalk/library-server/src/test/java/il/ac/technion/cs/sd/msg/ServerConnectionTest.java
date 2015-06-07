@@ -56,7 +56,7 @@ public class ServerConnectionTest {
 
 	@After
 	public void tearDown() throws Exception {
-		sc.kill();
+		sc.stop();
 	}
 
 	/////////////////////////////////////////////////////////////
@@ -87,7 +87,7 @@ public class ServerConnectionTest {
 	@Test (expected=RuntimeException.class)
 	public void cantSendAfterKillingConnection() {
 		sc.start(defaultBiConsumer);
-		sc.kill();
+		sc.stop();
 		sc.send("whoever", "should not be sent");
 	}
 	
@@ -123,8 +123,8 @@ public class ServerConnectionTest {
 	@Test
 	public void killingTwiceDoesNothing() {
 		sc.start(defaultBiConsumer);
-		sc.kill();
-		sc.kill();
+		sc.stop();
+		sc.stop();
 	}
 
 	@Test (expected=IllegalArgumentException.class)

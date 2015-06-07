@@ -153,21 +153,6 @@ public class ServerConnection<Message> {
 		
 		conn.send(to, content); // contents and connection state validation is done inside this.conn
 	}
-		
-	
-	/**
-	 * Terminate this connection. Stops all handling of incoming messages, receiving and sending messages,
-	 * as well as killing its messenger.
-	 * 
-	 * <p>
-	 * <b>Notice:</b><br>
-	 * Repeated calls are ignored.
-	 * </p>
-	 */
-	public void kill() {
-		this.conn.stop(); // connection state validation is done inside this.conn
-	}
-	
 	
 	/**
 	 * Get this ServerConnection's address.

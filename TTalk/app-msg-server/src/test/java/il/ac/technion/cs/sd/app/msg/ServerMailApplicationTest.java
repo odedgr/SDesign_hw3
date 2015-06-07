@@ -50,7 +50,7 @@ private static final String serverAddress = "ServerAddress";
 	public void tearDown() throws Exception {
 		server.stop();
 		server.clean();
-		Mockito.verify(connection).kill();
+		Mockito.verify(connection).stop();
 	}
 	
 	private void sendToServer(String sender, Exchange exchange) {

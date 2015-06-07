@@ -89,4 +89,11 @@ public class ServerData {
 		userQueues.remove(client);
 		return $;
 	}
+
+	/**
+	 * Clear all online users (before closing the server).
+	 */
+	public void disconnectAll() {
+		online.clear();
+	}
 }

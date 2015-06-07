@@ -38,19 +38,12 @@ public class IntegrationTestIsOnline {
 		server.clean();
 	}
 	
-	private void restartServer() {
-		server.stop();
-		server.start();
-	}
-
 	@Test
 	public void basicOnline() throws InterruptedException {
 		ClientMsgApplication client1 = buildClient("Dudu", s -> true);
 		ClientMsgApplication client2 = buildClient("Gulu", s -> true);
 		
 		client1.requestFriendship("Gulu");
-		
-		restartServer();
 		
 		assertTrue(client1.isOnline("Gulu").get());		
 		assertTrue(client2.isOnline("Dudu").get());
@@ -65,11 +58,7 @@ public class IntegrationTestIsOnline {
 		ClientMsgApplication client2 = buildClient("Gulu", s -> true);
 		client1.requestFriendship("Gulu");
 		
-		restartServer();
-		
 		client2.logout();
-		
-		restartServer();
 		
 		assertFalse(client1.isOnline("Gulu").get());
 		
@@ -80,10 +69,7 @@ public class IntegrationTestIsOnline {
 	@Test
 	public void emptyResponseWhenNotFriends() {
 		ClientMsgApplication client1 = buildClient("Dudu", s -> true);
-		restartServer();
 		ClientMsgApplication client2 = buildClient("Gulu", s -> true);
-		
-		restartServer();
 		
 		assertFalse(client1.isOnline("Gulu").isPresent());
 		
@@ -94,22 +80,15 @@ public class IntegrationTestIsOnline {
 	@Test
 	public void emptyResponseWhenFriendRequestDeclined() throws InterruptedException {
 		ClientMsgApplication client1 = buildClient("Dudu", s -> true);
-		restartServer();
 		ClientMsgApplication client2 = buildClient("Gulu", s -> false);
 		
 		client1.requestFriendship("Gulu");
 		
-		restartServer();
-		
 		assertFalse(client1.isOnline("Gulu").isPresent());
-		
-		restartServer();
 		
 		client2.requestFriendship("Dudu");
 		assertTrue(client1.isOnline("Gulu").isPresent());
 		assertTrue(client1.isOnline("Gulu").get());
-		
-		restartServer();
 		
 		client1.stop();
 		client2.stop();
@@ -118,19 +97,14 @@ public class IntegrationTestIsOnline {
 	@Test
 	public void logoutAndThenLogin() throws InterruptedException {
 		ClientMsgApplication client1 = buildClient("Dudu", s -> true);
-		restartServer();
 		ClientMsgApplication client2 = buildClient("Gulu", s -> true);
-		restartServer();
 		client1.requestFriendship("Gulu");
 		
 		assertTrue(client1.isOnline("Gulu").get());
-		restartServer();
 		client2.logout();
 		assertFalse(client1.isOnline("Gulu").get());
 		client2.login(x -> {}, s -> true, (x,y) -> {});
-		restartServer();
 		assertTrue(client1.isOnline("Gulu").get());
-		restartServer();
 		
 		client1.stop();
 		client2.stop();

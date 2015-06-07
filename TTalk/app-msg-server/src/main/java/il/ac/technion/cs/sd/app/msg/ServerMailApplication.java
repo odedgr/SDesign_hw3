@@ -91,7 +91,7 @@ public class ServerMailApplication {
 	 */
 	public void stop() {
 		connection.stop();
-		connection.kill();
+		data.disconnectAll();
 		saveData();
 	}
 	
@@ -149,7 +149,7 @@ public class ServerMailApplication {
 		public void visit(ConnectRequest request) {
 			data.connect(client);
 			List<Exchange> pendingMessages = data.getAndClearPendingClientMessages(client);
-			connection.send(client, new ExchangeList(pendingMessages));
+			sendIfOnline(client, new ExchangeList(pendingMessages));
 		}
 
 		@Override

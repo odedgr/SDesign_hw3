@@ -41,7 +41,7 @@ public class LibIntegrationTest {
 
 	@After
 	public void tearDown() throws Exception {
-		server.kill();
+		server.stop();
 		clients.stream().forEach(client->client.kill());
 	}
 
@@ -119,6 +119,4 @@ public class LibIntegrationTest {
 		assertTrue(received.contains(Envelope.wrap("client1","a","four")));
 		assertTrue(received.contains(Envelope.wrap("client2","a","five")));
 	}
-	
-
 }

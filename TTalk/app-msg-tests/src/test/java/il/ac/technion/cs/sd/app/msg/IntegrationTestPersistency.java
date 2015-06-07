@@ -50,6 +50,7 @@ public class IntegrationTestPersistency {
 	
 	private void restartServer() throws InterruptedException {
 		server.stop();
+		server = new ServerMailApplication("Server");
 		server.start();
 	}
 	
@@ -61,6 +62,7 @@ public class IntegrationTestPersistency {
 	
 	@Before
 	public void setp() {
+		server.clean();
 		server.start(); // non-blocking
 	}
 	
@@ -98,22 +100,20 @@ public class IntegrationTestPersistency {
 		ClientMsgApplication client2 = buildClient("Bob");
 		
 		loginClient(client1, "Alice");
-		restartServer();
 		client1.requestFriendship("Bob");
 		restartServer();
 		
 		// They are not friends yet, so isOnline returns an empty optional.
+		loginClient(client1, "Alice");
 		assertFalse(client1.isOnline("Bob").isPresent());
 		restartServer();
 		
+		loginClient(client1, "Alice");
 		loginClient(client2, "Bob");
-		restartServer();
 		// Now when bob logged in, then the friend request arrived and processed,
 		// so they are friends and both online, so isOnline returns true. 
 		assertTrue(client1.isOnline("Bob").isPresent());
 		assertTrue(client1.isOnline("Bob").get());
-		
-		restartServer();
 		
 		client1.stop();
 		client2.stop();
@@ -162,7 +162,6 @@ public class IntegrationTestPersistency {
 		loginClient(client1, "Alice");
 		client1.sendMessage("Bob", "Hi!");
 		client1.sendMessage("Bob", "How are you?");
-
 		// No messages arrived to bob before he logged in.
 		assertTrue(messages.get("Bob").isEmpty());
 		
@@ -171,7 +170,6 @@ public class IntegrationTestPersistency {
 		loginClient(client2, "Bob");
 		// Still no messages for bob since data was cleared.
 		assertTrue(messages.get("Bob").isEmpty());
-
 		client1.stop();
 		client2.stop();
 	}
